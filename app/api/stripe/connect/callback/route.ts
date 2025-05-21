@@ -31,11 +31,15 @@ export async function GET(req: Request) {
 
   const stripeAccountId = tokenResponse.stripe_user_id;
   const session = await getServerSession(authOptions);
-  // Guard against session.user being undefined
-  if (!session || !session.user?.id) {
+  if (!session) {
     return NextResponse.redirect(`${origin}/login`);
   }
-  const uid = session.user.id;
+
+  // TS doesn’t know about user.id, so assert it here
+  const { id: uid } = session.user as { id: string };
+  if (!uid) {
+    return NextResponse.redirect(`${origin}/login`);
+  }
 
   const userRec = await getUserRecord(uid);
   if (userRec) {
