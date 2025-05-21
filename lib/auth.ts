@@ -1,10 +1,9 @@
 // File: lib/auth.ts
 
-import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { upsertAirtableUser } from "@/lib/airtable";
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   providers: [
 	GoogleProvider({
 	  clientId: process.env.GOOGLE_CLIENT_ID!,
