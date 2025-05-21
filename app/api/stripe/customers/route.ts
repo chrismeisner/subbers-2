@@ -13,19 +13,22 @@ export async function GET(request: Request) {
 	return NextResponse.json({ customers: [] });
   }
 
-  // 2️⃣ Fetch the Airtable record to get their connected Stripe account
+  // 2️⃣ Fetch Airtable record and grab the raw field
   const userRec = await getUserRecord(session.user.id);
-  const stripeAccountId = userRec?.fields.stripeAccountId;
-  if (!stripeAccountId) {
+  const rawStripe = userRec?.fields.stripeAccountId;
+
+  // 3️⃣ Only proceed if it's really a string
+  if (!rawStripe || typeof rawStripe !== "string") {
 	return NextResponse.json({ customers: [] });
   }
+  const stripeAccountId = rawStripe;
 
-  // 3️⃣ List up to 100 customers from that connected account
+  // 4️⃣ Now TS knows stripeAccountId is a string
   const list = await stripe.customers.list(
 	{ limit: 100 },
 	{ stripeAccount: stripeAccountId }
   );
 
-  // 4️⃣ Return the array of customer objects
+  // 5️⃣ Return the results
   return NextResponse.json({ customers: list.data });
 }
