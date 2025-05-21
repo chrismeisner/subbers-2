@@ -13,19 +13,24 @@ export const authOptions = {
   ],
   secret: process.env.NEXTAUTH_SECRET,
   session: {
-	// narrow to the literal type so TS sees this as "jwt" not string
 	strategy: "jwt" as const,
 	maxAge: 5 * 24 * 60 * 60, // 5 days
   },
   callbacks: {
-	async signIn({ user }) {
+	async signIn({ user }: { user: any }) {
 	  await upsertAirtableUser({ uid: user.id, email: user.email! });
 	  return true;
 	},
-	async jwt({ token }) {
+	async jwt({ token }: { token: any }) {
 	  return token;
 	},
-	async session({ session, token }) {
+	async session({
+	  session,
+	  token,
+	}: {
+	  session: any;
+	  token: any;
+	}) {
 	  session.user.id = token.sub!;
 	  return session;
 	},
