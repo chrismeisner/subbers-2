@@ -6,7 +6,8 @@ import { authOptions } from "@/lib/auth";
 import { getUserRecord, Users } from "@/lib/airtable";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  // Cast session to any so TS knows `.user.id` exists
+  const session = (await getServerSession(authOptions)) as any;
   if (session) {
 	const rec = await getUserRecord(session.user.id);
 	if (rec) {
