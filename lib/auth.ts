@@ -1,9 +1,11 @@
 // File: lib/auth.ts
 
+import NextAuth from "next-auth/next";
+import type { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { upsertAirtableUser } from "@/lib/airtable";
 
-export const authOptions = {
+export const authOptions: AuthOptions = {
   providers: [
 	GoogleProvider({
 	  clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -12,12 +14,12 @@ export const authOptions = {
   ],
   secret: process.env.NEXTAUTH_SECRET,
   session: {
+	// now TS knows this must be one of the literal SessionStrategy values
 	strategy: "jwt",
 	maxAge: 5 * 24 * 60 * 60, // 5 days
   },
   callbacks: {
 	async signIn({ user }) {
-	  // Create or update user in Airtable
 	  await upsertAirtableUser({ uid: user.id, email: user.email! });
 	  return true;
 	},
@@ -25,9 +27,10 @@ export const authOptions = {
 	  return token;
 	},
 	async session({ session, token }) {
-	  // Attach our Airtable UID to the session
 	  session.user.id = token.sub!;
 	  return session;
 	},
   },
 };
+
+export default NextAuth(authOptions);
