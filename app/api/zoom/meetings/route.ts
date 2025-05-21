@@ -6,8 +6,8 @@ import { authOptions } from "@/lib/auth";
 import { getUserRecord } from "@/lib/airtable";
 
 export async function GET(request: Request) {
-  // 1️⃣ Ensure the user is signed in
-  const session = await getServerSession(authOptions);
+  // 1️⃣ Ensure the user is signed in (cast to any so TS knows .user exists)
+  const session = (await getServerSession(authOptions)) as any;
   if (!session) {
 	return NextResponse.json({ meetings: [] });
   }
