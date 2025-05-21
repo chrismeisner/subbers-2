@@ -1,11 +1,10 @@
 // File: lib/auth.ts
 
 import NextAuth from "next-auth/next";
-import type { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { upsertAirtableUser } from "@/lib/airtable";
 
-export const authOptions: AuthOptions = {
+export const authOptions = {
   providers: [
 	GoogleProvider({
 	  clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -14,8 +13,8 @@ export const authOptions: AuthOptions = {
   ],
   secret: process.env.NEXTAUTH_SECRET,
   session: {
-	// now TS knows this must be one of the literal SessionStrategy values
-	strategy: "jwt",
+	// narrow to the literal type so TS sees this as "jwt" not string
+	strategy: "jwt" as const,
 	maxAge: 5 * 24 * 60 * 60, // 5 days
   },
   callbacks: {
