@@ -1,7 +1,7 @@
 // File: app/api/zoom/connect/callback/route.ts
 
 import { NextResponse } from "next/server";
-import { exchangeZoomCodeForTokens } from "@/lib/zoom";
+import { exchangeZoomCodeForTokens, getZoomOAuthAuthorizeUrl } from "@/lib/zoom";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getUserRecord, Users } from "@/lib/airtable";
@@ -27,20 +27,24 @@ export async function GET(req: Request) {
     return NextResponse.redirect(`${origin}/dashboard?error=zoom_oauth_failed`);
   }
 
-  // Ensure user is authenticated
-  const session = await getServerSession(authOptions);
+  // Ensure user is authenticated (cast so TS knows .user exists)
+  const session = (await getServerSession(authOptions)) as any;
   if (!session) {
     console.error("[Zoom Callback] no valid session");
     return NextResponse.redirect(`${origin}/login`);
   }
   const uid = session.user.id;
+  if (!uid) {
+    console.error("[Zoom Callback] session.user.id missing");
+    return NextResponse.redirect(`${origin}/login`);
+  }
 
   // Persist tokens in Airtable user record
   const userRec = await getUserRecord(uid);
   if (userRec) {
     await Users.update(userRec.id, {
-      zoomAccessToken: tokens.access_token,
-      zoomRefreshToken: tokens.refresh_token,
+      zoomAccessToken: tokens.access_token as any,
+      zoomRefreshToken: tokens.refresh_token as any,
     });
     console.log("[Zoom Callback] updated Airtable record", userRec.id);
   } else {
