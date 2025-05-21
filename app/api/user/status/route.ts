@@ -7,8 +7,8 @@ import { getUserRecord } from "@/lib/airtable";
 import { getZoomUserProfile } from "@/lib/zoom";
 
 export async function GET(req: Request) {
-  // 1️⃣ Check session
-  const session = await getServerSession(authOptions);
+  // 1️⃣ Check session (cast to any so TS knows .user exists)
+  const session = (await getServerSession(authOptions)) as any;
   if (!session) {
 	return NextResponse.json({
 	  stripeConnected: false,
