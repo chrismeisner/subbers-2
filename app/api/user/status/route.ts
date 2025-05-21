@@ -1,4 +1,4 @@
-// File: app/api/user/status/route.ts
+// app/api/user/status/route.ts
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
@@ -6,7 +6,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getUserRecord } from "@/lib/airtable";
 import { getZoomUserProfile } from "@/lib/zoom";
 
-export async function GET() {
+export async function GET(req: Request) {
   // 1️⃣ Check session
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -32,7 +32,7 @@ export async function GET() {
 
   // 3️⃣ Determine connection flags
   const rawStripe = userRec.fields.stripeAccountId;
-  const rawZoom = userRec.fields.zoomAccessToken;
+  const rawZoom   = userRec.fields.zoomAccessToken;
   const stripeConnected = Boolean(rawStripe);
   let zoomConnected = Boolean(rawZoom);
   let zoomUserEmail: string | null = null;

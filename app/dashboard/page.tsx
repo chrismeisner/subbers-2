@@ -1,5 +1,3 @@
-// File: app/dashboard/page.tsx
-
 'use client';
 
 import { useSession } from 'next-auth/react';
@@ -13,7 +11,7 @@ interface UserStatus {
 }
 
 export default function DashboardPage() {
-  const { status } = useSession({ required: true });
+  const { data: session, status } = useSession({ required: true });
   const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
