@@ -8,7 +8,7 @@ import { stripe } from "@/lib/stripe";
 
 export async function GET(request: Request) {
   // 1️⃣ Ensure the user is signed in
-  const session = await getServerSession(authOptions);
+  const session = (await getServerSession(authOptions)) as any;
   if (!session) {
 	return NextResponse.json({ customers: [] });
   }
