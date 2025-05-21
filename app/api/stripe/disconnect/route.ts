@@ -8,10 +8,10 @@ import { getUserRecord, Users } from "@/lib/airtable";
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (session) {
-	// assert that user is non-null
-	const rec = await getUserRecord(session.user!.id);
+	const rec = await getUserRecord(session.user.id);
 	if (rec) {
-	  await Users.update(rec.id, { stripeAccountId: null });
+	  // Cast null to any so TS allows clearing the field
+	  await Users.update(rec.id, { stripeAccountId: null as any });
 	}
   }
   return NextResponse.redirect("/dashboard");
