@@ -25,14 +25,24 @@ interface Meeting {
   start_time: string;
 }
 
+interface PaymentLink {
+  id: string;
+  url: string;
+  active: boolean;
+  title: string | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+}
+
 export default function DashboardPage() {
-  const { data: session, status } = useSession({ required: true });
+  const { status } = useSession({ required: true });
 
   const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [hasMoreCustomers, setHasMoreCustomers] = useState(false);
   const [nextStartingAfter, setNextStartingAfter] = useState<string | null>(null);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,18 +50,19 @@ export default function DashboardPage() {
 	  console.log('🔄 [Dashboard] starting fetchAll');
 	  setLoading(true);
 	  try {
-		const res = await fetch('/api/user/status');
-		const data: UserStatus = await res.json();
-		console.log('✅ [Dashboard] userStatus:', data);
-		setUserStatus(data);
+		// 1️⃣ Fetch user status
+		const resStatus = await fetch('/api/user/status');
+		const statusData: UserStatus = await resStatus.json();
+		console.log('✅ [Dashboard] userStatus:', statusData);
+		setUserStatus(statusData);
 
-		if (data.stripeConnected) {
-		  console.log('🔍 [Dashboard] Stripe balance:', data.stripeAccountBalance);
-		  await fetchCustomers();
+		// 2️⃣ If Stripe is connected, fetch customers and payment links
+		if (statusData.stripeConnected) {
+		  await Promise.all([fetchCustomers(), fetchPaymentLinks()]);
 		}
 
-		if (data.zoomConnected) {
-		  console.log('🔍 [Dashboard] Zoom email:', data.zoomUserEmail);
+		// 3️⃣ If Zoom is connected, fetch meetings
+		if (statusData.zoomConnected) {
 		  await fetchMeetings();
 		}
 	  } catch (err) {
@@ -64,26 +75,46 @@ export default function DashboardPage() {
 	fetchAll();
   }, []);
 
+  // Fetch Stripe customers with pagination
   async function fetchCustomers(startingAfter?: string) {
 	const params = new URLSearchParams({ limit: '20' });
 	if (startingAfter) params.set('starting_after', startingAfter);
 	console.log(`➡️ [Dashboard] fetching /api/stripe/customers?${params}`);
 	const res = await fetch(`/api/stripe/customers?${params}`);
-	const { customers: newCustomers, hasMore } = await res.json();
-	console.log('✅ [Dashboard] fetched customers:', newCustomers, 'hasMore:', hasMore);
-	setCustomers(prev => (startingAfter ? [...prev, ...newCustomers] : newCustomers));
+	const { customers: newCustomers, hasMore } = (await res.json()) as {
+	  customers: Customer[];
+	  hasMore: boolean;
+	};
+	console.log('✅ [Dashboard] customers:', newCustomers, 'hasMore:', hasMore);
+	setCustomers(prev =>
+	  startingAfter ? [...prev, ...newCustomers] : newCustomers
+	);
 	setHasMoreCustomers(hasMore);
-	if (newCustomers.length) {
+	if (newCustomers.length > 0) {
 	  setNextStartingAfter(newCustomers[newCustomers.length - 1].id);
 	}
   }
 
+  // Fetch Stripe payment links
+  async function fetchPaymentLinks() {
+	console.log('➡️ [Dashboard] fetching /api/stripe/payment-links');
+	const res = await fetch('/api/stripe/payment-links');
+	const { paymentLinks: links } = (await res.json()) as {
+	  paymentLinks: PaymentLink[];
+	};
+	console.log('✅ [Dashboard] paymentLinks:', links);
+	setPaymentLinks(links);
+  }
+
+  // Fetch Zoom meetings
   async function fetchMeetings() {
-	console.log('➡️ [Dashboard] fetching Zoom meetings');
+	console.log('➡️ [Dashboard] fetching /api/zoom/meetings');
 	const res = await fetch('/api/zoom/meetings');
-	const { meetings } = await res.json();
-	console.log('✅ [Dashboard] fetched meetings:', meetings);
-	setMeetings(meetings);
+	const { meetings: zoomMeetings } = (await res.json()) as {
+	  meetings: Meeting[];
+	};
+	console.log('✅ [Dashboard] meetings:', zoomMeetings);
+	setMeetings(zoomMeetings);
   }
 
   if (status === 'loading' || loading || !userStatus) {
@@ -122,11 +153,15 @@ export default function DashboardPage() {
 				{new Intl.NumberFormat('en-US', {
 				  style: 'currency',
 				  currency: userStatus.stripeAccountBalance.currency,
-				}).format(userStatus.stripeAccountBalance.amount / 100)}
+				}).format(
+				  userStatus.stripeAccountBalance.amount / 100
+				)}
 			  </strong>
 			</p>
 		  ) : (
-			<p className="mt-2 text-sm text-red-600">Stripe balance not found</p>
+			<p className="mt-2 text-sm text-red-600">
+			  Stripe balance not found
+			</p>
 		  )
 		)}
 	  </div>
@@ -164,6 +199,57 @@ export default function DashboardPage() {
 		</div>
 	  )}
 
+	  {/* Stripe Payment Links Table */}
+	  {paymentLinks.length > 0 && (
+		<div className="p-4 bg-white shadow rounded">
+		  <h2 className="text-xl font-semibold mb-2">
+			Stripe Payment Links
+		  </h2>
+		  <table className="min-w-full table-auto">
+			<thead>
+			  <tr className="bg-gray-100">
+				<th className="px-3 py-2 text-left">Title</th>
+				<th className="px-3 py-2 text-left">URL</th>
+				<th className="px-3 py-2 text-left">Price</th>
+				<th className="px-3 py-2 text-left">Active</th>
+				<th className="px-3 py-2 text-left">Link ID</th>
+			  </tr>
+			</thead>
+			<tbody>
+			  {paymentLinks.map(pl => (
+				<tr key={pl.id} className="border-t">
+				  <td className="px-3 py-2">{pl.title ?? '—'}</td>
+				  <td className="px-3 py-2">
+					<a
+					  href={pl.url}
+					  target="_blank"
+					  rel="noopener noreferrer"
+					  className="text-blue-600 hover:underline"
+					>
+					  {pl.url}
+					</a>
+				  </td>
+				  <td className="px-3 py-2">
+					{pl.priceAmount != null && pl.priceCurrency
+					  ? new Intl.NumberFormat('en-US', {
+						  style: 'currency',
+						  currency: pl.priceCurrency,
+						}).format(pl.priceAmount / 100)
+					  : '—'}
+				  </td>
+				  <td className="px-3 py-2">
+					{pl.active ? 'Yes' : 'No'}
+				  </td>
+				  <td className="px-3 py-2 text-sm text-gray-600">
+					{pl.id}
+				  </td>
+				</tr>
+			  ))}
+			</tbody>
+		  </table>
+		</div>
+	  )}
+
 	  {/* Zoom Status & Email */}
 	  <div className="p-4 bg-white shadow rounded">
 		<div className="flex items-center justify-between">
@@ -190,7 +276,9 @@ export default function DashboardPage() {
 			  Zoom user email: <strong>{userStatus.zoomUserEmail}</strong>
 			</p>
 		  ) : (
-			<p className="mt-2 text-sm text-red-600">Zoom email not found</p>
+			<p className="mt-2 text-sm text-red-600">
+			  Zoom email not found
+			</p>
 		  )
 		)}
 	  </div>
@@ -198,7 +286,9 @@ export default function DashboardPage() {
 	  {/* Upcoming Zoom Meetings Table */}
 	  {meetings.length > 0 && (
 		<div className="p-4 bg-white shadow rounded">
-		  <h2 className="text-xl font-semibold mb-2">Upcoming Zoom Meetings</h2>
+		  <h2 className="text-xl font-semibold mb-2">
+			Upcoming Zoom Meetings
+		  </h2>
 		  <table className="min-w-full table-auto">
 			<thead>
 			  <tr className="bg-gray-100">
@@ -214,7 +304,9 @@ export default function DashboardPage() {
 				  <td className="px-3 py-2">
 					{new Date(m.start_time).toLocaleString()}
 				  </td>
-				  <td className="px-3 py-2 text-sm text-gray-600">{m.id}</td>
+				  <td className="px-3 py-2 text-sm text-gray-600">
+					{m.id}
+				  </td>
 				</tr>
 			  ))}
 			</tbody>
