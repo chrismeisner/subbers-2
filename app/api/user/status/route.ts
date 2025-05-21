@@ -37,8 +37,8 @@ export async function GET(req: Request) {
   let zoomConnected = Boolean(rawZoom);
   let zoomUserEmail: string | null = null;
 
-  // 4️⃣ If Zoom token exists, verify and fetch email
-  if (zoomConnected && rawZoom) {
+  // 4️⃣ If Zoom token exists and is a string, verify and fetch email
+  if (zoomConnected && typeof rawZoom === "string") {
 	try {
 	  const profile = await getZoomUserProfile(rawZoom);
 	  zoomUserEmail = profile.email || null;
