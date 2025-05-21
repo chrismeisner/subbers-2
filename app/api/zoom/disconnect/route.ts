@@ -10,9 +10,10 @@ export async function GET() {
   if (session) {
 	const rec = await getUserRecord(session.user.id);
 	if (rec) {
+	  // Cast null to any so TS allows clearing these fields
 	  await Users.update(rec.id, {
-		zoomAccessToken: null,
-		zoomRefreshToken: null,
+		zoomAccessToken: null as any,
+		zoomRefreshToken: null as any,
 	  });
 	}
   }
