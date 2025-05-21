@@ -31,7 +31,8 @@ export async function GET(req: Request) {
 
   const stripeAccountId = tokenResponse.stripe_user_id;
   const session = await getServerSession(authOptions);
-  if (!session) {
+  // Guard against session.user being undefined
+  if (!session || !session.user?.id) {
     return NextResponse.redirect(`${origin}/login`);
   }
   const uid = session.user.id;
