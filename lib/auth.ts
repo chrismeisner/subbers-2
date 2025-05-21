@@ -1,5 +1,6 @@
-// lib/auth.ts
-import NextAuth, { NextAuthOptions } from "next-auth";
+// File: lib/auth.ts
+
+import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { upsertAirtableUser } from "@/lib/airtable";
 
@@ -29,6 +30,3 @@ export const authOptions: NextAuthOptions = {
 	},
   },
 };
-
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };

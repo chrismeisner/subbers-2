@@ -1,6 +1,8 @@
 // File: app/api/auth/[...nextauth]/route.ts
 
-import { handler } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authOptions } from "@/lib/auth";
 
-// Only HTTP methods may be exported from a route.ts file
+const handler = NextAuth(authOptions);
+
 export { handler as GET, handler as POST };
