@@ -1,3 +1,5 @@
+// File: app/login/page.tsx
+
 'use client';
 
 import { signIn, useSession } from 'next-auth/react';
@@ -5,7 +7,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
 
   // If already signed in, redirect to dashboard
