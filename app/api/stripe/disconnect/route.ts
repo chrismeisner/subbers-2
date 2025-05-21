@@ -8,7 +8,8 @@ import { getUserRecord, Users } from "@/lib/airtable";
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (session) {
-	const rec = await getUserRecord(session.user.id);
+	// assert that user is non-null
+	const rec = await getUserRecord(session.user!.id);
 	if (rec) {
 	  await Users.update(rec.id, { stripeAccountId: null });
 	}
