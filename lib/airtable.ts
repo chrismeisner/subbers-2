@@ -1,31 +1,22 @@
 // lib/airtable.ts
 import Airtable, { FieldSet } from 'airtable';
 
-// Hard-code the table name instead of reading from env
-const apiKey = process.env.AIRTABLE_API_KEY!;
-const baseId = process.env.AIRTABLE_BASE_ID!;
+const apiKey    = process.env.AIRTABLE_API_KEY!;
+const baseId    = process.env.AIRTABLE_BASE_ID!;
 const tableName = 'Users';
 
 Airtable.configure({ apiKey });
 const base = Airtable.base(baseId);
 export const Users = base(tableName);
 
-/**
- * Fetch the Airtable record whose UID field matches the given user ID.
- */
-export async function getUserRecord(
-  uid: string
-): Promise<Airtable.Record<FieldSet> | null> {
-  const records = await Users.select({
+export async function getUserRecord(uid: string): Promise<Airtable.Record<FieldSet> | null> {
+  const [rec] = await Users.select({
 	filterByFormula: `{UID} = '${uid}'`,
 	maxRecords: 1,
   }).firstPage();
-  return records[0] || null;
+  return rec || null;
 }
 
-/**
- * Create or update an Airtable user row, ensuring at minimum UID + email.
- */
 export async function upsertAirtableUser({
   uid,
   email,
@@ -33,11 +24,19 @@ export async function upsertAirtableUser({
   uid: string;
   email: string;
 }): Promise<void> {
+  const env = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+  const fields = {
+	UID: uid,
+	Email: email,
+	Environment: env,
+  };
+
   const existing = await getUserRecord(uid);
-  const fields = { UID: uid, Email: email };
   if (existing) {
+	// update existing record
 	await Users.update(existing.id, fields);
   } else {
+	// create new record
 	await Users.create(fields);
   }
 }
