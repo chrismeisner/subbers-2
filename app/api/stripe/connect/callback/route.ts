@@ -30,13 +30,14 @@ export async function GET(req: Request) {
   }
 
   const stripeAccountId = tokenResponse.stripe_user_id;
-  const session = await getServerSession(authOptions);
+
+  // Cast session to any so TS won't complain about unknown properties
+  const session = (await getServerSession(authOptions)) as any;
   if (!session) {
     return NextResponse.redirect(`${origin}/login`);
   }
 
-  // TS doesn’t know about user.id, so assert it here
-  const { id: uid } = session.user as { id: string };
+  const uid = session.user?.id;
   if (!uid) {
     return NextResponse.redirect(`${origin}/login`);
   }
