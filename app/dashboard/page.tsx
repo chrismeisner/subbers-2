@@ -1,9 +1,9 @@
-// File: app/dashboard/page.tsx
-
+// app/dashboard/page.tsx
 'use client';
 
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 interface UserStatus {
   stripeConnected: boolean;
@@ -34,6 +34,23 @@ interface PaymentLink {
   priceCurrency: string | null;
 }
 
+interface SubscriptionPackage {
+  id: string;
+  fields: {
+	Title: string;
+	Slug: string;
+	FirstSession: string;
+	Recurring: boolean;
+	Frequency: string;
+	RRule?: string | null;
+	Price?: number | null;
+	Currency?: string | null;
+	Interval?: string | null;
+	Status?: string | null;
+	PaymentLinkURL?: string | null;
+  };
+}
+
 export default function DashboardPage() {
   const { status } = useSession({ required: true });
 
@@ -45,85 +62,188 @@ export default function DashboardPage() {
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [subscriptionPackages, setSubscriptionPackages] = useState<SubscriptionPackage[]>([]);
+  const [packagesLoading, setPackagesLoading] = useState(true);
+
+  const fetchSubscriptionPackages = useCallback(async () => {
+	setPackagesLoading(true);
+	try {
+	  const res = await fetch('/api/subscriptions/packages');
+	  const data = (await res.json()) as { subscriptionPackages: SubscriptionPackage[] };
+	  setSubscriptionPackages(data.subscriptionPackages || []);
+	} catch (err) {
+	  console.error('fetchSubscriptionPackages error', err);
+	} finally {
+	  setPackagesLoading(false);
+	}
+  }, []);
+
   useEffect(() => {
 	async function fetchAll() {
-	  console.log('🔄 [Dashboard] starting fetchAll');
 	  setLoading(true);
 	  try {
-		// 1️⃣ Fetch user status
 		const resStatus = await fetch('/api/user/status');
 		const statusData: UserStatus = await resStatus.json();
-		console.log('✅ [Dashboard] userStatus:', statusData);
 		setUserStatus(statusData);
 
-		// 2️⃣ If Stripe is connected, fetch customers and payment links
 		if (statusData.stripeConnected) {
 		  await Promise.all([fetchCustomers(), fetchPaymentLinks()]);
 		}
-
-		// 3️⃣ If Zoom is connected, fetch meetings
 		if (statusData.zoomConnected) {
 		  await fetchMeetings();
 		}
 	  } catch (err) {
-		console.error('❌ [Dashboard] fetchAll error', err);
+		console.error('fetchAll error', err);
 	  } finally {
 		setLoading(false);
-		console.log('🔚 [Dashboard] fetchAll complete');
 	  }
 	}
 	fetchAll();
-  }, []);
+	fetchSubscriptionPackages();
+  }, [fetchSubscriptionPackages]);
 
-  // Fetch Stripe customers with pagination
   async function fetchCustomers(startingAfter?: string) {
 	const params = new URLSearchParams({ limit: '20' });
 	if (startingAfter) params.set('starting_after', startingAfter);
-	console.log(`➡️ [Dashboard] fetching /api/stripe/customers?${params}`);
-	const res = await fetch(`/api/stripe/customers?${params}`);
-	const { customers: newCustomers, hasMore } = (await res.json()) as {
-	  customers: Customer[];
-	  hasMore: boolean;
-	};
-	console.log('✅ [Dashboard] customers:', newCustomers, 'hasMore:', hasMore);
-	setCustomers(prev =>
-	  startingAfter ? [...prev, ...newCustomers] : newCustomers
-	);
-	setHasMoreCustomers(hasMore);
-	if (newCustomers.length > 0) {
-	  setNextStartingAfter(newCustomers[newCustomers.length - 1].id);
+	try {
+	  const res = await fetch(`/api/stripe/customers?${params}`);
+	  const { customers: newCustomers, hasMore } = (await res.json()) as {
+		customers: Customer[];
+		hasMore: boolean;
+	  };
+	  setCustomers(prev => (startingAfter ? [...prev, ...newCustomers] : newCustomers));
+	  setHasMoreCustomers(hasMore);
+	  if (newCustomers.length > 0) {
+		setNextStartingAfter(newCustomers[newCustomers.length - 1].id);
+	  }
+	} catch (err) {
+	  console.error('fetchCustomers error', err);
 	}
   }
 
-  // Fetch Stripe payment links
   async function fetchPaymentLinks() {
-	console.log('➡️ [Dashboard] fetching /api/stripe/payment-links');
-	const res = await fetch('/api/stripe/payment-links');
-	const { paymentLinks: links } = (await res.json()) as {
-	  paymentLinks: PaymentLink[];
-	};
-	console.log('✅ [Dashboard] paymentLinks:', links);
-	setPaymentLinks(links);
+	try {
+	  const res = await fetch('/api/stripe/payment-links');
+	  const { paymentLinks: links } = (await res.json()) as {
+		paymentLinks: PaymentLink[];
+	  };
+	  setPaymentLinks(links);
+	} catch (err) {
+	  console.error('fetchPaymentLinks error', err);
+	}
   }
 
-  // Fetch Zoom meetings
   async function fetchMeetings() {
-	console.log('➡️ [Dashboard] fetching /api/zoom/meetings');
-	const res = await fetch('/api/zoom/meetings');
-	const { meetings: zoomMeetings } = (await res.json()) as {
-	  meetings: Meeting[];
-	};
-	console.log('✅ [Dashboard] meetings:', zoomMeetings);
-	setMeetings(zoomMeetings);
+	try {
+	  const res = await fetch('/api/zoom/meetings');
+	  const { meetings: zoomMeetings } = (await res.json()) as {
+		meetings: Meeting[];
+	  };
+	  setMeetings(zoomMeetings);
+	} catch (err) {
+	  console.error('fetchMeetings error', err);
+	}
   }
 
-  if (status === 'loading' || loading || !userStatus) {
+  if (status === 'loading' || loading || !userStatus || packagesLoading) {
 	return <p className="p-4">Loading dashboard…</p>;
   }
 
   return (
 	<div className="space-y-6">
-	  <h1 className="text-2xl font-bold">Dashboard</h1>
+	  {/* Header with Create Subscription */}
+	  <div className="flex items-center justify-between">
+		<h1 className="text-2xl font-bold">Dashboard</h1>
+		<Link
+		  href="/subscriptions/new"
+		  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+		>
+		  Create Subscription
+		</Link>
+	  </div>
+
+	  {/* Subscription Packages Table */}
+	  <div className="p-4 bg-white shadow rounded">
+		<h2 className="text-xl font-semibold mb-2">Subscription Packages</h2>
+		<table className="min-w-full table-auto">
+		  <thead>
+			<tr className="bg-gray-100">
+			  <th className="px-3 py-2 text-left">Title</th>
+			  <th className="px-3 py-2 text-left">First Session</th>
+			  <th className="px-3 py-2 text-left">Recurring</th>
+			  <th className="px-3 py-2 text-left">Frequency</th>
+			  <th className="px-3 py-2 text-left">RRule</th>
+			  <th className="px-3 py-2 text-left">Price</th>
+			  <th className="px-3 py-2 text-left">Currency</th>
+			  <th className="px-3 py-2 text-left">Interval</th>
+			  <th className="px-3 py-2 text-left">Status</th>
+			  <th className="px-3 py-2 text-left">Stripe Status</th>
+			  <th className="px-3 py-2 text-left">Actions</th>
+			</tr>
+		  </thead>
+		  <tbody>
+			{subscriptionPackages.length > 0 ? (
+			  subscriptionPackages.map(pkg => (
+				<tr key={pkg.id} className="border-t">
+				  <td className="px-3 py-2">
+					<Link
+					  href={`/subscriptions/${pkg.fields.Slug}`}
+					  className="text-blue-600 hover:underline"
+					>
+					  {pkg.fields.Title}
+					</Link>
+				  </td>
+				  <td className="px-3 py-2">
+					{new Date(pkg.fields.FirstSession).toLocaleString()}
+				  </td>
+				  <td className="px-3 py-2">{pkg.fields.Recurring ? 'Yes' : 'No'}</td>
+				  <td className="px-3 py-2">{pkg.fields.Frequency}</td>
+				  <td className="px-3 py-2">{pkg.fields.RRule ?? '—'}</td>
+				  <td className="px-3 py-2">
+					{pkg.fields.Price != null && pkg.fields.Currency
+					  ? new Intl.NumberFormat('en-US', {
+						  style: 'currency',
+						  currency: pkg.fields.Currency,
+						}).format(pkg.fields.Price / 100)
+					  : '—'}
+				  </td>
+				  <td className="px-3 py-2">{pkg.fields.Currency ?? '—'}</td>
+				  <td className="px-3 py-2">{pkg.fields.Interval ?? '—'}</td>
+				  <td className="px-3 py-2">{pkg.fields.Status ?? '—'}</td>
+				  <td className="px-3 py-2">
+					{pkg.fields.PaymentLinkURL ? (
+					  <a
+						href={pkg.fields.PaymentLinkURL}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-green-600 hover:underline"
+					  >
+						Link Created
+					  </a>
+					) : (
+					  <span className="text-red-500">Pending</span>
+					)}
+				  </td>
+				  <td className="px-3 py-2">
+					<Link
+					  href={`/subscriptions/${pkg.fields.Slug}/edit`}
+					  className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+					>
+					  Edit
+					</Link>
+				  </td>
+				</tr>
+			  ))
+			) : (
+			  <tr>
+				<td colSpan={11} className="px-3 py-2 text-center text-gray-600">
+				  No subscription packages found.
+				</td>
+			  </tr>
+			)}
+		  </tbody>
+		</table>
+	  </div>
 
 	  {/* Stripe Status & Balance */}
 	  <div className="p-4 bg-white shadow rounded">
@@ -145,24 +265,16 @@ export default function DashboardPage() {
 			</button>
 		  )}
 		</div>
-		{userStatus.stripeConnected && (
-		  userStatus.stripeAccountBalance ? (
-			<p className="mt-2 text-sm text-gray-700">
-			  Current Stripe balance:{' '}
-			  <strong>
-				{new Intl.NumberFormat('en-US', {
-				  style: 'currency',
-				  currency: userStatus.stripeAccountBalance.currency,
-				}).format(
-				  userStatus.stripeAccountBalance.amount / 100
-				)}
-			  </strong>
-			</p>
-		  ) : (
-			<p className="mt-2 text-sm text-red-600">
-			  Stripe balance not found
-			</p>
-		  )
+		{userStatus.stripeConnected && userStatus.stripeAccountBalance && (
+		  <p className="mt-2 text-sm text-gray-700">
+			Current Stripe balance:{' '}
+			<strong>
+			  {new Intl.NumberFormat('en-US', {
+				style: 'currency',
+				currency: userStatus.stripeAccountBalance.currency,
+			  }).format(userStatus.stripeAccountBalance.amount / 100)}
+			</strong>
+		  </p>
 		)}
 	  </div>
 
@@ -202,9 +314,7 @@ export default function DashboardPage() {
 	  {/* Stripe Payment Links Table */}
 	  {paymentLinks.length > 0 && (
 		<div className="p-4 bg-white shadow rounded">
-		  <h2 className="text-xl font-semibold mb-2">
-			Stripe Payment Links
-		  </h2>
+		  <h2 className="text-xl font-semibold mb-2">Stripe Payment Links</h2>
 		  <table className="min-w-full table-auto">
 			<thead>
 			  <tr className="bg-gray-100">
@@ -237,12 +347,8 @@ export default function DashboardPage() {
 						}).format(pl.priceAmount / 100)
 					  : '—'}
 				  </td>
-				  <td className="px-3 py-2">
-					{pl.active ? 'Yes' : 'No'}
-				  </td>
-				  <td className="px-3 py-2 text-sm text-gray-600">
-					{pl.id}
-				  </td>
+				  <td className="px-3 py-2">{pl.active ? 'Yes' : 'No'}</td>
+				  <td className="px-3 py-2 text-sm text-gray-600">{pl.id}</td>
 				</tr>
 			  ))}
 			</tbody>
@@ -270,25 +376,17 @@ export default function DashboardPage() {
 			</button>
 		  )}
 		</div>
-		{userStatus.zoomConnected && (
-		  userStatus.zoomUserEmail ? (
-			<p className="mt-2 text-sm text-gray-700">
-			  Zoom user email: <strong>{userStatus.zoomUserEmail}</strong>
-			</p>
-		  ) : (
-			<p className="mt-2 text-sm text-red-600">
-			  Zoom email not found
-			</p>
-		  )
+		{userStatus.zoomConnected && userStatus.zoomUserEmail && (
+		  <p className="mt-2 text-sm text-gray-700">
+			Zoom user email: <strong>{userStatus.zoomUserEmail}</strong>
+		  </p>
 		)}
 	  </div>
 
 	  {/* Upcoming Zoom Meetings Table */}
 	  {meetings.length > 0 && (
 		<div className="p-4 bg-white shadow rounded">
-		  <h2 className="text-xl font-semibold mb-2">
-			Upcoming Zoom Meetings
-		  </h2>
+		  <h2 className="text-xl font-semibold mb-2">Upcoming Zoom Meetings</h2>
 		  <table className="min-w-full table-auto">
 			<thead>
 			  <tr className="bg-gray-100">
@@ -301,12 +399,8 @@ export default function DashboardPage() {
 			  {meetings.map(m => (
 				<tr key={m.id} className="border-t">
 				  <td className="px-3 py-2">{m.topic}</td>
-				  <td className="px-3 py-2">
-					{new Date(m.start_time).toLocaleString()}
-				  </td>
-				  <td className="px-3 py-2 text-sm text-gray-600">
-					{m.id}
-				  </td>
+				  <td className="px-3 py-2">{new Date(m.start_time).toLocaleString()}</td>
+				  <td className="px-3 py-2 text-sm text-gray-600">{m.id}</td>
 				</tr>
 			  ))}
 			</tbody>
