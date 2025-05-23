@@ -21,6 +21,7 @@ interface SubscriptionFields {
 
 export default function PackageDetailPage() {
   const { slug } = useParams<{ slug: string }>();
+  const [recordId, setRecordId] = useState<string | null>(null);
   const [fields, setFields] = useState<SubscriptionFields | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +30,7 @@ export default function PackageDetailPage() {
   useEffect(() => {
 	setLoading(true);
 	setError(null);
+
 	fetch('/api/subscriptions/packages')
 	  .then(res => {
 		if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
@@ -39,6 +41,7 @@ export default function PackageDetailPage() {
 		if (!pkg) {
 		  throw new Error('Subscription not found');
 		}
+		setRecordId(pkg.id);
 		setFields(pkg.fields as SubscriptionFields);
 	  })
 	  .catch(err => {
@@ -51,20 +54,20 @@ export default function PackageDetailPage() {
   }, [slug]);
 
   const handleCreateLink = async () => {
-	if (!fields) return;
+	if (!recordId) return;
 	setCreating(true);
 	try {
 	  const res = await fetch('/api/subscriptions/confirm', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ subscriptionPackageId: fields.Slug }),
+		body: JSON.stringify({ subscriptionPackageId: recordId }),
 	  });
 	  const json = await res.json();
 	  if (!res.ok) {
 		throw new Error(json.error || 'Failed to create payment link');
 	  }
 	  const url = json.url as string;
-	  setFields(f => f ? { ...f, PaymentLinkURL: url, Status: 'Live' } : f);
+	  setFields(f => (f ? { ...f, PaymentLinkURL: url, Status: 'Live' } : f));
 	} catch (err: any) {
 	  console.error('[PackageDetailPage] create link error', err);
 	  alert(err.message);

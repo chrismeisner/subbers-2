@@ -1,10 +1,27 @@
 // app/api/subscriptions/confirm/route.ts
-
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getUserRecord, SubscriptionPackages } from '@/lib/airtable';
 import { stripe } from '@/lib/stripe';
+
+/**
+ * Map our Interval values to Stripe’s required singular intervals.
+ */
+function mapInterval(iv: string): 'day' | 'week' | 'month' | 'year' {
+  switch (iv) {
+	case 'Daily':
+	  return 'day';
+	case 'Weekly':
+	  return 'week';
+	case 'Monthly':
+	  return 'month';
+	case 'Yearly':
+	  return 'year';
+	default:
+	  throw new Error(`Unsupported interval: ${iv}`);
+  }
+}
 
 export async function POST(req: Request) {
   // 1️⃣ Authenticate user
@@ -24,7 +41,7 @@ export async function POST(req: Request) {
   let pkgRecord;
   try {
 	pkgRecord = await SubscriptionPackages.find(subscriptionPackageId);
-  } catch (err) {
+  } catch {
 	return NextResponse.json({ error: 'Subscription package not found' }, { status: 404 });
   }
   const pkgFields = pkgRecord.fields;
@@ -43,18 +60,19 @@ export async function POST(req: Request) {
   );
 
   // 6️⃣ Create a Stripe Price
-  const price = await stripe.prices.create(
-	{
-	  unit_amount: pkgFields.Price as number,
-	  currency: pkgFields.Currency as string,
-	  recurring:
-		pkgFields.Interval !== 'One-off'
-		  ? { interval: (pkgFields.Interval as string).toLowerCase() as 'monthly' | 'yearly' }
-		  : undefined,
-	  product: product.id,
-	},
-	{ stripeAccount }
-  );
+  const priceParams: any = {
+	unit_amount: pkgFields.Price as number,
+	currency: pkgFields.Currency as string,
+	product: product.id,
+  };
+
+  if (pkgFields.Interval && pkgFields.Interval !== 'One-off') {
+	priceParams.recurring = {
+	  interval: mapInterval(pkgFields.Interval as string),
+	};
+  }
+
+  const price = await stripe.prices.create(priceParams, { stripeAccount });
 
   // 7️⃣ Create a Stripe Payment Link
   const paymentLink = await stripe.paymentLinks.create(

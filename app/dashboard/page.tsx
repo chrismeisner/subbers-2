@@ -218,7 +218,7 @@ export default function DashboardPage() {
 						rel="noopener noreferrer"
 						className="text-green-600 hover:underline"
 					  >
-						Link Created
+						Live
 					  </a>
 					) : (
 					  <span className="text-red-500">Pending</span>
