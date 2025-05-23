@@ -106,7 +106,7 @@ export default function DashboardPage() {
 	const params = new URLSearchParams({ limit: '20' });
 	if (startingAfter) params.set('starting_after', startingAfter);
 	try {
-	  const res = await fetch(`/api/stripe/customers?${params}`);
+	  const res = await fetch(`/api/stripe/customers?${params.toString()}`);
 	  const { customers: newCustomers, hasMore } = (await res.json()) as {
 		customers: Customer[];
 		hasMore: boolean;
@@ -350,7 +350,7 @@ export default function DashboardPage() {
 				  <td className="px-3 py-2">{pl.active ? 'Yes' : 'No'}</td>
 				  <td className="px-3 py-2 text-sm text-gray-600">{pl.id}</td>
 				</tr>
-			  ))}
+			  ))}  
 			</tbody>
 		  </table>
 		</div>

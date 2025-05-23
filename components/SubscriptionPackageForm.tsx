@@ -1,18 +1,17 @@
 // components/SubscriptionPackageForm.tsx
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent } from 'react';
 
 export interface FormValues {
   Title: string;
-  Slug: string;
   FirstSession: string;   // ISO date-time string
   Recurring: boolean;
-  Frequency: string;
+  Frequency: string;      // "None" | "Daily" | "Weekly" | "Monthly" | "Custom"
   RRule?: string;
-  Price: number;
+  Price: number;          // in cents
   Currency: string;
-  Interval: string;
+  Interval: string;       // "One-off" | "Monthly" | "Yearly"
 }
 
 interface SubscriptionPackageFormProps {
@@ -22,20 +21,11 @@ interface SubscriptionPackageFormProps {
   onSubmit: (values: FormValues) => void;
 }
 
-function generateSlug(title: string): string {
-  return title
-	.toLowerCase()
-	.trim()
-	.replace(/\s+/g, '-')
-	.replace(/[^\w-]/g, '');
-}
-
 export default function SubscriptionPackageForm({
   initial = {},
   onSubmit,
 }: SubscriptionPackageFormProps) {
   const [Title, setTitle] = useState(initial.Title ?? '');
-  const [Slug, setSlug] = useState(initial.Slug ?? '');
   const [firstSessionInput, setFirstSessionInput] = useState(
 	initial.FirstSession
 	  ? new Date(initial.FirstSession).toISOString().slice(0, 16)
@@ -49,28 +39,17 @@ export default function SubscriptionPackageForm({
   const [Interval, setInterval] = useState(initial.Interval ?? 'One-off');
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-generate slug when the title changes and slug was not manually edited
-  useEffect(() => {
-	if (!initial.Slug) {
-	  setSlug(generateSlug(Title));
-	}
-  }, [Title, initial.Slug]);
-
   const handleSubmit = (e: FormEvent) => {
 	e.preventDefault();
 	setError(null);
 
-	// Slug validation
-	if (!Slug.trim()) {
-	  setError('Please enter a slug for the URL.');
-	  return;
-	}
-
-	// Meeting validation
+	// Title validation
 	if (!Title.trim()) {
 	  setError('Please enter a title.');
 	  return;
 	}
+
+	// First session validation
 	if (!firstSessionInput) {
 	  setError('Please select the first session date/time.');
 	  return;
@@ -84,6 +63,8 @@ export default function SubscriptionPackageForm({
 	  setError('First session must be in the future.');
 	  return;
 	}
+
+	// Recurrence validation
 	if (Recurring) {
 	  if (Frequency === 'None') {
 		setError('Please select a recurrence frequency.');
@@ -101,10 +82,8 @@ export default function SubscriptionPackageForm({
 	  return;
 	}
 
-	// Build payload
 	const values: FormValues = {
 	  Title: Title.trim(),
-	  Slug: Slug.trim(),
 	  FirstSession: firstDate.toISOString(),
 	  Recurring,
 	  Frequency,
@@ -128,7 +107,6 @@ export default function SubscriptionPackageForm({
 	>
 	  {error && <p className="text-red-600">{error}</p>}
 
-	  {/* Meeting Setup */}
 	  <div>
 		<label className="block font-medium">Title</label>
 		<input
@@ -138,18 +116,6 @@ export default function SubscriptionPackageForm({
 		  className="mt-1 block w-full border-gray-300 rounded p-2"
 		  placeholder="e.g. Weekly Coaching"
 		/>
-	  </div>
-
-	  <div>
-		<label className="block font-medium">Slug (URL-friendly)</label>
-		<input
-		  type="text"
-		  value={Slug}
-		  onChange={e => setSlug(e.target.value)}
-		  className="mt-1 block w-full border-gray-300 rounded p-2"
-		  placeholder="e.g. weekly-coaching"
-		/>
-		<p className="text-sm text-gray-500">This will be used in the URL.</p>
 	  </div>
 
 	  <div>
@@ -210,7 +176,6 @@ export default function SubscriptionPackageForm({
 		</div>
 	  )}
 
-	  {/* Pricing Setup */}
 	  <div>
 		<label className="block font-medium">Price (cents)</label>
 		<input

@@ -34,7 +34,6 @@ export default function EditSubscriptionPage() {
 		}
 		const {
 		  Title,
-		  Slug,
 		  FirstSession,
 		  Recurring,
 		  Frequency,
@@ -46,7 +45,6 @@ export default function EditSubscriptionPage() {
 		setRecordId(pkg.id);
 		setInitialValues({
 		  Title,
-		  Slug,
 		  FirstSession,
 		  Recurring,
 		  Frequency,
@@ -98,10 +96,7 @@ export default function EditSubscriptionPage() {
 
   return (
 	<div className="container mx-auto p-4">
-	  <SubscriptionPackageForm
-		initial={initialValues!}
-		onSubmit={handleSubmit}
-	  />
+	  <SubscriptionPackageForm initial={initialValues!} onSubmit={handleSubmit} />
 	</div>
   );
 }
