@@ -4,11 +4,9 @@ export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
 
 const CACHE_KEY = 'dashboardData';
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-
 
 interface UserStatus {
   stripeConnected: boolean;
@@ -18,11 +16,27 @@ interface UserStatus {
   zoomUserEmail: string | null;
 }
 
-interface Customer { id: string; name: string | null; email: string | null; }
-interface Meeting { id: string; topic: string; start_time: string; }
-interface PaymentLink { id: string; url: string; active: boolean; title: string | null; priceAmount: number | null; priceCurrency: string | null; }
+interface Customer {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
 
-// Purchase History shape, with product and recurring info
+interface Meeting {
+  id: string;
+  topic: string;
+  start_time: string;
+}
+
+interface PaymentLink {
+  id: string;
+  url: string;
+  active: boolean;
+  title: string | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+}
+
 interface Purchase {
   id: string;
   created: number;
@@ -56,7 +70,6 @@ interface SubscriptionPackage {
 
 export default function DashboardPage() {
   const { status } = useSession({ required: true });
-  const searchParams = useSearchParams();
 
   const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -83,23 +96,27 @@ export default function DashboardPage() {
   const fetchAll = useCallback(async () => {
 	setLoading(true);
 	try {
-	  // 1️⃣ User status
+	  // 1️⃣ Fetch user status
 	  const statusRes = await fetch('/api/user/status').then(r => r.json());
 	  setUserStatus(statusRes);
 
-	  // 2️⃣ Customers & payment links
-	  let custData: Customer[] = [], hasMore = false, linksData: PaymentLink[] = [];
+	  // 2️⃣ Fetch Stripe customers & payment links if connected
+	  let custData: Customer[] = [];
+	  let hasMore = false;
+	  let linksData: PaymentLink[] = [];
+
 	  if (statusRes.stripeConnected) {
 		const custRes = await fetch('/api/stripe/customers?limit=20').then(r => r.json());
 		custData = custRes.customers;
 		hasMore = custRes.hasMore;
+
 		linksData = (await fetch('/api/stripe/payment-links').then(r => r.json())).paymentLinks;
 	  }
 	  setCustomers(custData);
 	  setHasMoreCustomers(hasMore);
 	  setPaymentLinks(linksData);
 
-	  // 2️⃣.5️⃣ Purchase history
+	  // 2️⃣.5️⃣ Fetch Purchase History if connected and filter out unpaid
 	  let purchasesData: Purchase[] = [];
 	  if (statusRes.stripeConnected) {
 		const purRes = await fetch('/api/stripe/purchases').then(r => r.json());
@@ -107,18 +124,18 @@ export default function DashboardPage() {
 	  }
 	  setPurchases(purchasesData);
 
-	  // 3️⃣ Zoom meetings
+	  // 3️⃣ Fetch Zoom meetings if connected
 	  let meetsData: Meeting[] = [];
 	  if (statusRes.zoomConnected) {
 		meetsData = (await fetch('/api/zoom/meetings').then(r => r.json())).meetings;
 	  }
 	  setMeetings(meetsData);
 
-	  // 4️⃣ Subscription packages
+	  // 4️⃣ Fetch subscription packages
 	  const pkgsRes = await fetch('/api/subscriptions/packages').then(r => r.json());
 	  setSubscriptionPackages(pkgsRes.subscriptionPackages || []);
 
-	  // 5️⃣ Cache all
+	  // 5️⃣ Cache everything with a timestamp
 	  const now = Date.now();
 	  setLastUpdated(now);
 	  localStorage.setItem(
@@ -134,8 +151,8 @@ export default function DashboardPage() {
 		  subscriptionPackages: pkgsRes.subscriptionPackages,
 		})
 	  );
-	} catch (e) {
-	  console.error('Dashboard fetchAll error', e);
+	} catch (error) {
+	  console.error('Dashboard fetchAll error', error);
 	} finally {
 	  setLoading(false);
 	}
@@ -143,18 +160,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
 	if (status !== 'authenticated') return;
-	const force = searchParams.get('forceRefresh') === '1';
+
+	// detect ?forceRefresh=1 from window.location
+	const force =
+	  typeof window !== 'undefined' &&
+	  new URLSearchParams(window.location.search).get('forceRefresh') === '1';
+
 	if (force) {
 	  fetchAll();
 	  return;
 	}
+
 	let cache: any = null;
 	try {
 	  cache = JSON.parse(localStorage.getItem(CACHE_KEY)!);
 	} catch {}
 
-	const fresh = cache && Date.now() - cache.timestamp < CACHE_TTL;
-	if (fresh) {
+	const isFresh = cache && Date.now() - cache.timestamp < CACHE_TTL;
+	if (isFresh) {
 	  setLastUpdated(cache.timestamp);
 	  setUserStatus(cache.userStatus);
 	  setCustomers(cache.customers);
@@ -167,13 +190,17 @@ export default function DashboardPage() {
 	} else {
 	  fetchAll();
 	}
-  }, [status, fetchAll, searchParams]);
+  }, [status, fetchAll]);
+
+  const handleRefresh = () => {
+	fetchAll();
+  };
 
   if (status === 'loading' || loading || !userStatus) {
 	return <p className="p-4">Loading dashboard…</p>;
   }
 
-  // Sort packages
+  // Filter out deleted packages and sort
   const visiblePackages = subscriptionPackages.filter(pkg => pkg.fields.Status !== 'Deleted');
   const sortedPackages = [...visiblePackages].sort((a, b) => {
 	let cmp = 0;
@@ -211,7 +238,7 @@ export default function DashboardPage() {
 			</span>
 		  )}
 		  <button
-			onClick={fetchAll}
+			onClick={handleRefresh}
 			className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
 		  >
 			Refresh
@@ -370,7 +397,7 @@ export default function DashboardPage() {
 		  </table>
 		  {hasMoreCustomers && (
 			<button
-			  onClick={fetchAll}
+			  onClick={handleRefresh}
 			  className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
 			>
 			  Load more
@@ -388,9 +415,7 @@ export default function DashboardPage() {
 			  <tr className="bg-gray-100">
 				<th className="px-3 py-2 text-left">Title</th>
 				<th className="px-3 py-2 text-left">URL</th>
-				<th className="px-3 py-2 text-left">
-				  Price
-				</th>
+				<th className="px-3 py-2 text-left">Price</th>
 				<th className="px-3 py-2 text-left">Active</th>
 				<th className="px-3 py-2 text-left">Link ID</th>
 			  </tr>
@@ -450,10 +475,12 @@ export default function DashboardPage() {
 				  <td className="px-3 py-2">{p.payment_status}</td>
 				  <td className="px-3 py-2">{p.productName}</td>
 				  <td className="px-3 py-2">{p.isRecurring ? 'Subscription' : 'One-off'}</td>
-				  <td className="px-3 py-2">{new Intl.NumberFormat('en-US', {
+				  <td className="px-3 py-2">
+					{new Intl.NumberFormat('en-US', {
 					  style: 'currency',
 					  currency: p.currency,
-					}).format(p.amount_total / 100)}</td>
+					}).format(p.amount_total / 100)}
+				  </td>
 				  <td className="px-3 py-2">
 					{p.url ? (
 					  <a
@@ -475,7 +502,7 @@ export default function DashboardPage() {
 		</div>
 	  )}
 
-	  {/* Zoom Status & Meetings */}
+	  {/* Zoom Status & Upcoming Meetings */}
 	  <div className="p-4 bg-white shadow rounded">
 		<div className="flex items-center justify-between">
 		  <span className="font-medium">Zoom:</span>
