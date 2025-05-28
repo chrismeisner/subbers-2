@@ -2,6 +2,7 @@
 
 import { SessionProvider } from 'next-auth/react';
 import Navbar from './Navbar';
+import Footer from './Footer';   // ← import your new footer
 import { ReactNode } from 'react';
 
 interface LayoutProps {
@@ -16,6 +17,7 @@ export default function Layout({ children }: LayoutProps) {
 		<main className="flex-grow container mx-auto p-4">
 		  {children}
 		</main>
+		<Footer />
 	  </div>
 	</SessionProvider>
   );

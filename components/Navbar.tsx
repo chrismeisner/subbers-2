@@ -1,3 +1,4 @@
+// File: components/Navbar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -7,7 +8,7 @@ export default function Navbar() {
   const { data: session, status } = useSession();
 
   return (
-	<nav className="bg-white shadow p-4 flex justify-between items-center">
+	<nav className="sticky top-0 z-50 bg-white shadow p-4 flex justify-between items-center">
 	  <div className="space-x-4">
 		<Link href="/">
 		  Home

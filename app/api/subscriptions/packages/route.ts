@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import {
   getSubscriptionPackages,
   upsertSubscriptionPackage,
+  SubscriptionPackages,
 } from '@/lib/airtable';
 
 export async function GET() {
@@ -21,6 +22,8 @@ export async function GET() {
     const records = await getSubscriptionPackages(uid);
     const subscriptionPackages = records.map(r => ({
       id: r.id,
+      // pull the Airtable "Created" timestamp field directly
+      createdTime: r.fields.Created as string,
       fields: r.fields,
     }));
     return NextResponse.json({ subscriptionPackages });
@@ -39,21 +42,40 @@ export async function POST(req: Request) {
 
   const uid = session.user.id;
   const body = await req.json();
+  const { recordId, Status, ...rest } = body;
 
+  if (!recordId) {
+    return NextResponse.json({ error: 'Missing recordId' }, { status: 400 });
+  }
+
+  // 2️⃣ Handle a pure status update (e.g. delete or change status)
+  if (Status) {
+    try {
+      await SubscriptionPackages.update(recordId, { Status });
+      return NextResponse.json({ success: true, subscriptionPackage: { id: recordId } });
+    } catch (err: any) {
+      console.error('[Subscriptions API] POST status update error', err);
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+  }
+
+  // 3️⃣ Otherwise, full upsert of subscription package
   try {
     const record = await upsertSubscriptionPackage({
       uid,
-      recordId: body.recordId,
-      forceCreate: body.forceCreate,
-      meetingTemplateId: body.meetingTemplateId,
-      Title: body.Title,
-      FirstSession: body.FirstSession,
-      Recurring: body.Recurring,
-      Frequency: body.Frequency,
-      RRule: body.RRule,
-      Price: body.Price,
-      Currency: body.Currency,
-      Interval: body.Interval,
+      recordId: rest.recordId,
+      forceCreate: rest.forceCreate,
+      meetingTemplateId: rest.meetingTemplateId,
+      Title: rest.Title,
+      FirstSession: rest.FirstSession,
+      Recurring: rest.Recurring,
+      Frequency: rest.Frequency,
+      RRule: rest.RRule,
+      Duration: rest.Duration,
+      Price: rest.Price,
+      Currency: rest.Currency,
+      Interval: rest.Interval,
+      TimeZone: rest.TimeZone,
     });
 
     return NextResponse.json({
@@ -64,7 +86,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (err: any) {
-    console.error('[Subscriptions API] POST error', err);
+    console.error('[Subscriptions API] POST upsert error', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
