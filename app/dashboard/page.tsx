@@ -1,4 +1,6 @@
 'use client';
+export const dynamic = 'force-dynamic';
+
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback } from 'react';
@@ -6,6 +8,7 @@ import { useSearchParams } from 'next/navigation';
 
 const CACHE_KEY = 'dashboardData';
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
 
 interface UserStatus {
   stripeConnected: boolean;
