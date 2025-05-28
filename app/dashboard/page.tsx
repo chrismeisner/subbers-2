@@ -15,28 +15,11 @@ interface UserStatus {
   zoomUserEmail: string | null;
 }
 
-interface Customer {
-  id: string;
-  name: string | null;
-  email: string | null;
-}
+interface Customer { id: string; name: string | null; email: string | null; }
+interface Meeting { id: string; topic: string; start_time: string; }
+interface PaymentLink { id: string; url: string; active: boolean; title: string | null; priceAmount: number | null; priceCurrency: string | null; }
 
-interface Meeting {
-  id: string;
-  topic: string;
-  start_time: string;
-}
-
-interface PaymentLink {
-  id: string;
-  url: string;
-  active: boolean;
-  title: string | null;
-  priceAmount: number | null;
-  priceCurrency: string | null;
-}
-
-// Updated Purchase interface
+// Purchase History shape, with product and recurring info
 interface Purchase {
   id: string;
   created: number;
@@ -101,10 +84,8 @@ export default function DashboardPage() {
 	  const statusRes = await fetch('/api/user/status').then(r => r.json());
 	  setUserStatus(statusRes);
 
-	  // 2️⃣ Stripe customers & payment links
-	  let custData: Customer[] = [];
-	  let hasMore = false;
-	  let linksData: PaymentLink[] = [];
+	  // 2️⃣ Customers & payment links
+	  let custData: Customer[] = [], hasMore = false, linksData: PaymentLink[] = [];
 	  if (statusRes.stripeConnected) {
 		const custRes = await fetch('/api/stripe/customers?limit=20').then(r => r.json());
 		custData = custRes.customers;
@@ -134,7 +115,7 @@ export default function DashboardPage() {
 	  const pkgsRes = await fetch('/api/subscriptions/packages').then(r => r.json());
 	  setSubscriptionPackages(pkgsRes.subscriptionPackages || []);
 
-	  // 5️⃣ Cache
+	  // 5️⃣ Cache all
 	  const now = Date.now();
 	  setLastUpdated(now);
 	  localStorage.setItem(
@@ -164,7 +145,6 @@ export default function DashboardPage() {
 	  fetchAll();
 	  return;
 	}
-
 	let cache: any = null;
 	try {
 	  cache = JSON.parse(localStorage.getItem(CACHE_KEY)!);
@@ -186,13 +166,11 @@ export default function DashboardPage() {
 	}
   }, [status, fetchAll, searchParams]);
 
-  const handleRefresh = () => fetchAll();
-
   if (status === 'loading' || loading || !userStatus) {
 	return <p className="p-4">Loading dashboard…</p>;
   }
 
-  // Packages sorting
+  // Sort packages
   const visiblePackages = subscriptionPackages.filter(pkg => pkg.fields.Status !== 'Deleted');
   const sortedPackages = [...visiblePackages].sort((a, b) => {
 	let cmp = 0;
@@ -215,7 +193,6 @@ export default function DashboardPage() {
 
   return (
 	<div className="space-y-6">
-
 	  {/* Header */}
 	  <div className="flex items-center justify-between">
 		<h1 className="text-2xl font-bold">Dashboard</h1>
@@ -231,7 +208,7 @@ export default function DashboardPage() {
 			</span>
 		  )}
 		  <button
-			onClick={handleRefresh}
+			onClick={fetchAll}
 			className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
 		  >
 			Refresh
@@ -251,31 +228,19 @@ export default function DashboardPage() {
 		<table className="min-w-full table-auto">
 		  <thead>
 			<tr className="bg-gray-100">
-			  <th
-				className="px-3 py-2 text-left cursor-pointer"
-				onClick={() => handleSort('Title')}
-			  >
+			  <th className="px-3 py-2 text-left cursor-pointer" onClick={() => handleSort('Title')}>
 				Title{sortKey === 'Title' ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
 			  </th>
-			  <th
-				className="px-3 py-2 text-left cursor-pointer"
-				onClick={() => handleSort('Created')}
-			  >
+			  <th className="px-3 py-2 text-left cursor-pointer" onClick={() => handleSort('Created')}>
 				Created{sortKey === 'Created' ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
 			  </th>
-			  <th
-				className="px-3 py-2 text-left cursor-pointer"
-				onClick={() => handleSort('FirstSession')}
-			  >
+			  <th className="px-3 py-2 text-left cursor-pointer" onClick={() => handleSort('FirstSession')}>
 				First Session{sortKey === 'FirstSession' ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
 			  </th>
 			  <th className="px-3 py-2 text-left">Recurring</th>
 			  <th className="px-3 py-2 text-left">Frequency</th>
 			  <th className="px-3 py-2 text-left">RRule</th>
-			  <th
-				className="px-3 py-2 text-left cursor-pointer"
-				onClick={() => handleSort('Price')}
-			  >
+			  <th className="px-3 py-2 text-left cursor-pointer" onClick={() => handleSort('Price')}>
 				Price{sortKey === 'Price' ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
 			  </th>
 			  <th className="px-3 py-2 text-left">Currency</th>
@@ -345,20 +310,20 @@ export default function DashboardPage() {
 		</table>
 	  </div>
 
-	  {/* Stripe Status & Balance */}
+	  {/* Stripe Status */}
 	  <div className="p-4 bg-white shadow rounded">
 		<div className="flex items-center justify-between">
 		  <span className="font-medium">Stripe:</span>
 		  {userStatus.stripeConnected ? (
 			<button
-			  onClick={() => window.location.href = '/api/stripe/disconnect'}
+			  onClick={() => (window.location.href = '/api/stripe/disconnect')}
 			  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
 			>
 			  Disconnect
 			</button>
 		  ) : (
 			<button
-			  onClick={() => window.location.href = '/api/stripe/connect'}
+			  onClick={() => (window.location.href = '/api/stripe/connect')}
 			  className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
 			>
 			  Connect Stripe
@@ -402,7 +367,7 @@ export default function DashboardPage() {
 		  </table>
 		  {hasMoreCustomers && (
 			<button
-			  onClick={handleRefresh}
+			  onClick={fetchAll}
 			  className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
 			>
 			  Load more
@@ -420,7 +385,9 @@ export default function DashboardPage() {
 			  <tr className="bg-gray-100">
 				<th className="px-3 py-2 text-left">Title</th>
 				<th className="px-3 py-2 text-left">URL</th>
-				<th className="px-3 py-2 text-left">Price</th>
+				<th className="px-3 py-2 text-left">
+				  Price
+				</th>
 				<th className="px-3 py-2 text-left">Active</th>
 				<th className="px-3 py-2 text-left">Link ID</th>
 			  </tr>
@@ -480,12 +447,10 @@ export default function DashboardPage() {
 				  <td className="px-3 py-2">{p.payment_status}</td>
 				  <td className="px-3 py-2">{p.productName}</td>
 				  <td className="px-3 py-2">{p.isRecurring ? 'Subscription' : 'One-off'}</td>
-				  <td className="px-3 py-2">
-					{new Intl.NumberFormat('en-US', {
+				  <td className="px-3 py-2">{new Intl.NumberFormat('en-US', {
 					  style: 'currency',
 					  currency: p.currency,
-					}).format(p.amount_total / 100)}
-				  </td>
+					}).format(p.amount_total / 100)}</td>
 				  <td className="px-3 py-2">
 					{p.url ? (
 					  <a
@@ -507,58 +472,56 @@ export default function DashboardPage() {
 		</div>
 	  )}
 
-	  {/* Zoom Status & Upcoming Meetings */}
-	  <div className="space-y-6">
-		<div className="p-4 bg-white shadow rounded">
-		  <div className="flex items-center justify-between">
-			<span className="font-medium">Zoom:</span>
-			{userStatus.zoomConnected ? (
-			  <button
-				onClick={() => window.location.href = '/api/zoom/disconnect'}
-				className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-			  >
-				Disconnect
-			  </button>
-			) : (
-			  <button
-				onClick={() => window.location.href = '/api/zoom/connect'}
-				className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-			  >
-				Connect Zoom
-			  </button>
-			)}
-		  </div>
-		  {userStatus.zoomConnected && userStatus.zoomUserEmail && (
-			<p className="mt-2 text-sm text-gray-700">
-			  Zoom user email: <strong>{userStatus.zoomUserEmail}</strong>
-			</p>
+	  {/* Zoom Status & Meetings */}
+	  <div className="p-4 bg-white shadow rounded">
+		<div className="flex items-center justify-between">
+		  <span className="font-medium">Zoom:</span>
+		  {userStatus.zoomConnected ? (
+			<button
+			  onClick={() => (window.location.href = '/api/zoom/disconnect')}
+			  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+			>
+			  Disconnect
+			</button>
+		  ) : (
+			<button
+			  onClick={() => (window.location.href = '/api/zoom/connect')}
+			  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+			>
+			  Connect Zoom
+			</button>
 		  )}
 		</div>
-
-		{meetings.length > 0 && (
-		  <div className="p-4 bg-white shadow rounded">
-			<h2 className="text-xl font-semibold mb-2">Upcoming Zoom Meetings</h2>
-			<table className="min-w-full table-auto">
-			  <thead>
-				<tr className="bg-gray-100">
-				  <th className="px-3 py-2 text-left">Topic</th>
-				  <th className="px-3 py-2 text-left">Start Time</th>
-				  <th className="px-3 py-2 text-left">Meeting ID</th>
-				</tr>
-			  </thead>
-			  <tbody>
-				{meetings.map(m => (
-				  <tr key={m.id} className="border-t">
-					<td className="px-3 py-2">{m.topic}</td>
-					<td className="px-3 py-2">{new Date(m.start_time).toLocaleString()}</td>
-					<td className="px-3 py-2 text-sm text-gray-600">{m.id}</td>
-				  </tr>
-				))}
-			  </tbody>
-			</table>
-		  </div>
+		{userStatus.zoomConnected && userStatus.zoomUserEmail && (
+		  <p className="mt-2 text-sm text-gray-700">
+			Zoom user email: <strong>{userStatus.zoomUserEmail}</strong>
+		  </p>
 		)}
 	  </div>
+
+	  {meetings.length > 0 && (
+		<div className="p-4 bg-white shadow rounded">
+		  <h2 className="text-xl font-semibold mb-2">Upcoming Zoom Meetings</h2>
+		  <table className="min-w-full table-auto">
+			<thead>
+			  <tr className="bg-gray-100">
+				<th className="px-3 py-2 text-left">Topic</th>
+				<th className="px-3 py-2 text-left">Start Time</th>
+				<th className="px-3 py-2 text-left">Meeting ID</th>
+			  </tr>
+			</thead>
+			<tbody>
+			  {meetings.map(m => (
+				<tr key={m.id} className="border-t">
+				  <td className="px-3 py-2">{m.topic}</td>
+				  <td className="px-3 py-2">{new Date(m.start_time).toLocaleString()}</td>
+				  <td className="px-3 py-2 text-sm text-gray-600">{m.id}</td>
+				</tr>
+			  ))}
+			</tbody>
+		  </table>
+		</div>
+	  )}
 	</div>
   );
 }
