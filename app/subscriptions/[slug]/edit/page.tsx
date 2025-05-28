@@ -1,4 +1,5 @@
 // app/subscriptions/[slug]/edit/page.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -16,7 +17,7 @@ export default function EditSubscriptionPage() {
 
   const [savingDraft, setSavingDraft] = useState(false);
   const [creating, setCreating] = useState(false);
-
+  const [creatingEvent, setCreatingEvent] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -45,6 +46,7 @@ export default function EditSubscriptionPage() {
 		  Interval,
 		  Status,
 		} = pkg.fields;
+
 		setRecordId(pkg.id);
 		setInitialValues({
 		  Title,
@@ -112,6 +114,31 @@ export default function EditSubscriptionPage() {
 	}
   };
 
+  const handleCreateNextEvent = async () => {
+	if (!slug || !initialValues?.FirstSession) return;
+	setCreatingEvent(true);
+	try {
+	  const res = await fetch(
+		`/api/subscriptions/${encodeURIComponent(slug)}/meetings/create`,
+		{
+		  method: 'POST',
+		  headers: { 'Content-Type': 'application/json' },
+		  body: JSON.stringify({ startsAt: initialValues.FirstSession }),
+		}
+	  );
+	  if (!res.ok) {
+		const json = await res.json().catch(() => ({}));
+		throw new Error(json.error || 'Failed to create next event.');
+	  }
+	  router.refresh();
+	} catch (err: any) {
+	  console.error('[EditSubscriptionPage] create event error', err);
+	  setError(err.message);
+	} finally {
+	  setCreatingEvent(false);
+	}
+  };
+
   const handleDelete = async () => {
 	if (!recordId) return;
 	setDeleting(true);
@@ -134,7 +161,8 @@ export default function EditSubscriptionPage() {
   };
 
   if (loading) return <p className="p-4">Loading subscription…</p>;
-  if (error || !initialValues) return <p className="p-4 text-red-600">{error || 'Subscription not found.'}</p>;
+  if (error || !initialValues)
+	return <p className="p-4 text-red-600">{error || 'Subscription not found.'}</p>;
 
   const isDraft = initialValues.Status === 'Draft';
 
@@ -158,6 +186,17 @@ export default function EditSubscriptionPage() {
 		>
 		  {creating ? 'Creating…' : 'Create Subscription'}
 		</button>
+
+		<button
+		  onClick={handleCreateNextEvent}
+		  disabled={creatingEvent}
+		  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+		>
+		  {creatingEvent
+			? 'Creating…'
+			: `Create Next Event (${new Date(initialValues.FirstSession!).toLocaleString()})`}
+		</button>
+
 		<button
 		  onClick={() => setShowDeleteModal(true)}
 		  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
@@ -171,8 +210,8 @@ export default function EditSubscriptionPage() {
 		  <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
 			<h2 className="text-lg font-semibold mb-4">Confirm Deletion</h2>
 			<p className="mb-6">
-			  Are you sure you want to delete the subscription “<strong>{initialValues.Title}</strong>”?
-			  This action cannot be undone.
+			  Are you sure you want to delete the subscription “
+			  <strong>{initialValues.Title}</strong>”? This action cannot be undone.
 			</p>
 			<div className="flex justify-end space-x-4">
 			  <button

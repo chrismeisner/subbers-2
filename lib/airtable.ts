@@ -229,3 +229,12 @@ export async function createMeetingForPackage(
     StartsAt: startsAt,
   });
 }
+
+/**
+ * Fetch all SubscriptionPackages whose Status is "Live."
+ */
+export async function getAllSubscriptionPackages(): Promise<Airtable.Record<FieldSet>[]> {
+  return SubscriptionPackages.select({
+    filterByFormula: `{Status}='Live'`
+  }).firstPage();
+}

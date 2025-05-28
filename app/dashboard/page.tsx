@@ -109,7 +109,6 @@ export default function DashboardPage() {
 		const custRes = await fetch('/api/stripe/customers?limit=20').then(r => r.json());
 		custData = custRes.customers;
 		hasMore = custRes.hasMore;
-
 		linksData = (await fetch('/api/stripe/payment-links').then(r => r.json())).paymentLinks;
 	  }
 	  setCustomers(custData);
@@ -254,7 +253,24 @@ export default function DashboardPage() {
 
 	  {/* Subscription Packages */}
 	  <div className="p-4 bg-white shadow rounded">
-		<h2 className="text-xl font-semibold mb-2">Subscription Packages</h2>
+		<div className="flex items-center justify-between mb-2">
+		  <h2 className="text-xl font-semibold">Subscription Packages</h2>
+		  <button
+			onClick={async () => {
+			  try {
+				const res = await fetch('/api/scheduler/run', { method: 'POST' });
+				if (!res.ok) throw new Error(await res.text());
+				alert('Scheduler triggered successfully!');
+			  } catch (err: any) {
+				console.error(err);
+				alert('Error triggering scheduler: ' + err.message);
+			  }
+			}}
+			className="text-sm px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600"
+		  >
+			Trigger Cron Jobs
+		  </button>
+		</div>
 		<table className="min-w-full table-auto">
 		  <thead>
 			<tr className="bg-gray-100">
@@ -430,9 +446,7 @@ export default function DashboardPage() {
 					  target="_blank"
 					  rel="noopener noreferrer"
 					  className="text-blue-600 hover:underline"
-					>
-					  {pl.url}
-					</a>
+					>{pl.url}</a>
 				  </td>
 				  <td className="px-3 py-2">
 					{pl.priceAmount != null && pl.priceCurrency
@@ -488,9 +502,7 @@ export default function DashboardPage() {
 						target="_blank"
 						rel="noopener noreferrer"
 						className="text-blue-600 hover:underline"
-					  >
-						View
-					  </a>
+					  >View</a>
 					) : (
 					  '—'
 					)}
