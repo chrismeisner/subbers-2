@@ -1,5 +1,3 @@
-// File: app/dashboard/page.tsx
-
 'use client';
 export const dynamic = 'force-dynamic';
 
@@ -274,7 +272,16 @@ export default function DashboardPage() {
 		  <button onClick={handleTriggerCron} className="px-3 py-1 bg-yellow-500 text-white rounded">
 			Trigger Cron Jobs
 		  </button>
-		  <Link href="/subscriptions/new" className="px-4 py-2 bg-green-600 text-white rounded">
+		  <Link
+			href="/dashboard/import-subscriptions"
+			className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+		  >
+			Import Subscriptions
+		  </Link>
+		  <Link
+			href="/subscriptions/new"
+			className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+		  >
 			Create Subscription
 		  </Link>
 		</div>
