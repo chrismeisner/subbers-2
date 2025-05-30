@@ -19,16 +19,6 @@ interface SubscriptionFields {
   PaymentLinkURL?: string;
 }
 
-interface MeetingRecord {
-  id: string;
-  fields: {
-	StartsAt: string;
-	ZoomMeetingId?: string;
-	ZoomJoinUrl?: string;
-	[key: string]: any;
-  };
-}
-
 export default function PackageDetailPage() {
   const { slug } = useParams<{ slug: string }>();
 
@@ -38,10 +28,7 @@ export default function PackageDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [creatingLink, setCreatingLink] = useState(false);
-  const [creatingEvent, setCreatingEvent] = useState(false);
-
-  const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
-  const [meetingsLoading, setMeetingsLoading] = useState(true);
+  const [schedulingNext, setSchedulingNext] = useState(false);
 
   // Load subscription package
   useEffect(() => {
@@ -50,12 +37,10 @@ export default function PackageDetailPage() {
 
 	fetch('/api/subscriptions/packages')
 	  .then(res => {
-		console.log('[PackageDetailPage] subscription fetch status', res.status);
 		if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
 		return res.json();
 	  })
 	  .then((data: { subscriptionPackages: { id: string; fields: any }[] }) => {
-		console.log('[PackageDetailPage] subscription data', data);
 		const pkg = data.subscriptionPackages.find(p => p.fields.Slug === slug);
 		if (!pkg) {
 		  throw new Error('Subscription not found');
@@ -64,36 +49,9 @@ export default function PackageDetailPage() {
 		setFields(pkg.fields as SubscriptionFields);
 	  })
 	  .catch(err => {
-		console.error('[PackageDetailPage] subscription error', err);
 		setError(err.message);
 	  })
-	  .finally(() => {
-		setLoading(false);
-	  });
-  }, [slug]);
-
-  // Load meetings once slug is known
-  useEffect(() => {
-	if (!slug) return;
-	console.log('[PackageDetailPage] fetching meetings for slug:', slug);
-	setMeetingsLoading(true);
-
-	fetch(`/api/subscriptions/${slug}/meetings`)
-	  .then(res => {
-		console.log('[PackageDetailPage] meetings fetch status', res.status);
-		if (!res.ok) throw new Error(`Meetings fetch failed: ${res.status}`);
-		return res.json();
-	  })
-	  .then((data: { meetings: MeetingRecord[] }) => {
-		console.log('[PackageDetailPage] meetings data', data.meetings);
-		setMeetings(data.meetings);
-	  })
-	  .catch(err => {
-		console.error('[PackageDetailPage] meetings error', err);
-	  })
-	  .finally(() => {
-		setMeetingsLoading(false);
-	  });
+	  .finally(() => setLoading(false));
   }, [slug]);
 
   const handleCreateLink = async () => {
@@ -106,54 +64,35 @@ export default function PackageDetailPage() {
 		body: JSON.stringify({ subscriptionPackageId: recordId }),
 	  });
 	  const json = await res.json();
-	  console.log('[PackageDetailPage] create link response', json);
 	  if (!res.ok) throw new Error(json.error || 'Failed to create payment link');
-	  setFields(f =>
-		f ? { ...f, PaymentLinkURL: json.url, Status: 'Live' } : f
-	  );
+	  setFields(f => f ? { ...f, PaymentLinkURL: json.url, Status: 'Live' } : f);
 	} catch (err: any) {
-	  console.error('[PackageDetailPage] create link error', err);
 	  alert(err.message);
 	} finally {
 	  setCreatingLink(false);
 	}
   };
 
-  const handleCreateNext = async () => {
-	if (!slug) return;
-	setCreatingEvent(true);
-	console.log('[PackageDetailPage] creating next event for slug:', slug);
+  const handleScheduleNext = async () => {
+	if (!recordId) return;
+	setSchedulingNext(true);
 	try {
-	  const res = await fetch(`/api/subscriptions/${slug}/meetings/create`, {
+	  const res = await fetch(`/api/scheduler/run/${recordId}`, {
 		method: 'POST',
 	  });
 	  const json = await res.json();
-	  console.log('[PackageDetailPage] create event response', json);
-	  if (!res.ok) throw new Error(json.error || 'Failed to create next event');
-	  // Refresh meetings list
-	  const mRes = await fetch(`/api/subscriptions/${slug}/meetings`);
-	  const mJson = await mRes.json();
-	  console.log('[PackageDetailPage] refreshed meetings', mJson.meetings);
-	  setMeetings(mJson.meetings);
+	  if (!res.ok) throw new Error(json.error || 'Failed to schedule next meeting');
+	  // Optionally refresh or notify
+	  alert('Next meeting scheduled successfully.');
 	} catch (err: any) {
-	  console.error('[PackageDetailPage] create event error', err);
 	  alert(err.message);
 	} finally {
-	  setCreatingEvent(false);
+	  setSchedulingNext(false);
 	}
   };
 
-  if (loading) {
-	return <p className="p-4">Loading subscription details…</p>;
-  }
-  if (error || !fields) {
-	return <p className="p-4 text-red-600">{error || 'Subscription not found.'}</p>;
-  }
-
-  // Determine next upcoming meeting
-  const nextMeeting = meetings.find(
-	m => new Date(m.fields.StartsAt) > new Date()
-  );
+  if (loading) return <p className="p-4">Loading subscription details…</p>;
+  if (error || !fields) return <p className="p-4 text-red-600">{error || 'Subscription not found.'}</p>;
 
   return (
 	<div className="container mx-auto p-4 bg-white shadow rounded space-y-6">
@@ -169,8 +108,7 @@ export default function PackageDetailPage() {
 
 	  <ul className="list-disc list-inside space-y-1">
 		<li>
-		  <strong>First Session:</strong>{' '}
-		  {new Date(fields.FirstSession).toLocaleString()}
+		  <strong>First Session:</strong> {new Date(fields.FirstSession).toLocaleString()}
 		</li>
 		<li>
 		  <strong>Recurring:</strong> {fields.Recurring ? 'Yes' : 'No'}
@@ -219,52 +157,13 @@ export default function PackageDetailPage() {
 		)}
 
 		<button
-		  onClick={handleCreateNext}
-		  disabled={creatingEvent}
+		  onClick={handleScheduleNext}
+		  disabled={schedulingNext}
 		  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
 		>
-		  {creatingEvent ? 'Creating…' : 'Create Next Event'}
+		  {schedulingNext ? 'Scheduling…' : 'Schedule Next Event'}
 		</button>
 	  </div>
-
-	  <section>
-		<h2 className="text-xl font-semibold">Next Upcoming Meeting</h2>
-		{meetingsLoading ? (
-		  <p>Loading meetings…</p>
-		) : nextMeeting ? (
-		  <table className="min-w-full table-auto">
-			<thead>
-			  <tr className="bg-gray-100">
-				<th className="px-3 py-2 text-left">Starts At</th>
-				<th className="px-3 py-2 text-left">Zoom Link</th>
-			  </tr>
-			</thead>
-			<tbody>
-			  <tr className="border-t">
-				<td className="px-3 py-2">
-				  {new Date(nextMeeting.fields.StartsAt).toLocaleString()}
-				</td>
-				<td className="px-3 py-2">
-				  {nextMeeting.fields.ZoomJoinUrl ? (
-					<a
-					  href={nextMeeting.fields.ZoomJoinUrl}
-					  target="_blank"
-					  rel="noopener noreferrer"
-					  className="text-blue-600 hover:underline"
-					>
-					  Join Meeting
-					</a>
-				  ) : (
-					<span className="text-gray-600">Not available</span>
-				  )}
-				</td>
-			  </tr>
-			</tbody>
-		  </table>
-		) : (
-		  <p>No upcoming meetings scheduled.</p>
-		)}
-	  </section>
 	</div>
   );
 }

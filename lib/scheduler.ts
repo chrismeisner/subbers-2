@@ -1,16 +1,16 @@
 // lib/scheduler.ts
 
-import { RRule } from 'rrule';
+import { RRule, RRuleOptions } from 'rrule';
 import {
   getAllSubscriptionPackages,
+  getSubscriptionPackageById,
   getMeetingsForPackage,
   createMeetingForPackage,
 } from '@/lib/airtable';
 
 /**
  * For each “Live” subscription package, compute its next meeting date
- * based on FirstSession and RRule, then create a Meeting record if one
- * doesn’t already exist at that timestamp.
+ * and create a Meeting record if one doesn’t already exist at that timestamp.
  */
 export async function scheduleNextMeetings() {
   const today = new Date();
@@ -20,44 +20,46 @@ export async function scheduleNextMeetings() {
   const livePkgs = await getAllSubscriptionPackages();
   console.log(`[Scheduler] Found ${livePkgs.length} live packages`);
 
-  // 2️⃣ Process each package
   for (const pkg of livePkgs) {
 	const pkgId = pkg.id;
 	const fields = pkg.fields as any;
 	const title = fields.Title;
-
-	// Log the raw FirstSession value
-	console.log(
-	  `[Scheduler] Package ${pkgId} (“${title}”) – FirstSession raw value:`,
-	  fields.FirstSession
-	);
-	const firstSess = new Date(fields.FirstSession);
-
+	const firstSessIso = fields.FirstSession;
+	const firstSess = new Date(firstSessIso);
 	let nextDate: Date | null = null;
 
-	// Log how we're interpreting the RRule
+	// 2️⃣ Compute next occurrence, anchoring dtstart at FirstSession
 	if (fields.RRule) {
 	  console.log(
 		`[Scheduler] Package ${pkgId} (“${title}”) – interpreting RRule:`,
 		fields.RRule
 	  );
 	  try {
-		const rule = RRule.fromString(fields.RRule as string);
-		console.log(`[Scheduler]   -> Rule frequency: ${rule.origOptions.freq}`);
+		// Parse stored RRULE into options
+		const opts: Partial<RRuleOptions> = RRule.parseString(fields.RRule as string);
+		// Anchor rule at the original first session date/time
+		opts.dtstart = firstSess;
+		const rule = new RRule(opts as RRuleOptions);
 		nextDate = rule.after(today, true);
+		console.log(
+		  `[Scheduler]   -> anchored dtstart=${firstSess.toISOString()}, computed nextDate=${nextDate?.toISOString()}`
+		);
 	  } catch (e) {
 		console.error(
-		  `[Scheduler] Invalid RRule on package ${pkgId}:`,
+		  `[Scheduler] Invalid RRule on ${pkgId}:`,
 		  fields.RRule,
 		  e
 		);
 	  }
 	} else {
 	  console.log(
-		`[Scheduler] Package ${pkgId} (“${title}”) has no RRule, using one-off logic`
+		`[Scheduler] Package ${pkgId} (“${title}”) has no RRule, using one-off logic: FirstSession = ${firstSessIso}`
 	  );
 	  if (today < firstSess) {
 		nextDate = firstSess;
+		console.log(
+		  `[Scheduler]   -> nextDate set to FirstSession: ${nextDate.toISOString()}`
+		);
 	  }
 	}
 
@@ -65,7 +67,7 @@ export async function scheduleNextMeetings() {
 	if (nextDate) {
 	  const iso = nextDate.toISOString();
 	  console.log(
-		`[Scheduler] Package ${pkgId} (“${title}”) – computed nextDate:`,
+		`[Scheduler] Package ${pkgId} (“${title}”) – scheduling nextDate:`,
 		iso
 	  );
 
@@ -100,4 +102,96 @@ export async function scheduleNextMeetings() {
   }
 
   console.log('[Scheduler] scheduleNextMeetings complete');
+}
+
+/**
+ * Compute and schedule exactly one next meeting for the given package ID.
+ */
+export async function scheduleNextMeetingForPackage(pkgId: string) {
+  console.log(
+	`[Scheduler Single] scheduleNextMeetingForPackage – pkgId: ${pkgId}`
+  );
+
+  const pkg = await getSubscriptionPackageById(pkgId);
+  if (!pkg || (pkg.fields as any).Status !== 'Live') {
+	console.log(
+	  `[Scheduler Single] Package ${pkgId} not found or not live, skipping.`
+	);
+	return;
+  }
+
+  const fields = pkg.fields as any;
+  const title = fields.Title;
+  const today = new Date();
+  const firstSessIso = fields.FirstSession;
+  const firstSess = new Date(firstSessIso);
+  console.log(
+	`[Scheduler Single] today=${today.toISOString()}, FirstSession=${firstSessIso}, RRule=${fields.RRule}`
+  );
+
+  let nextDate: Date | null = null;
+
+  if (fields.RRule) {
+	console.log(
+	  `[Scheduler Single] interpreting RRule: ${fields.RRule}`
+	);
+	try {
+	  const opts: Partial<RRuleOptions> = RRule.parseString(fields.RRule as string);
+	  opts.dtstart = firstSess;
+	  const rule = new RRule(opts as RRuleOptions);
+	  nextDate = rule.after(today, true);
+	  console.log(
+		`[Scheduler Single] anchored dtstart=${firstSess.toISOString()}, computed nextDate=${nextDate?.toISOString()}`
+	  );
+	} catch (e) {
+	  console.error(
+		`[Scheduler Single] Invalid RRule on ${pkgId}:`,
+		fields.RRule,
+		e
+	  );
+	}
+  } else {
+	console.log(
+	  `[Scheduler Single] no RRule, one-off logic: FirstSession=${firstSessIso}`
+	);
+	if (today < firstSess) {
+	  nextDate = firstSess;
+	  console.log(
+		`[Scheduler Single] using FirstSession as nextDate: ${nextDate.toISOString()}`
+	  );
+	}
+  }
+
+  if (!nextDate) {
+	console.log(
+	  `[Scheduler Single] Package ${pkgId} (“${title}”) – no upcoming date, skipping creation.`
+	);
+	return;
+  }
+
+  const iso = nextDate.toISOString();
+  const existing = await getMeetingsForPackage(pkgId, fields.UID as string);
+  const existingStarts = new Set(existing.map(m => m.fields.StartsAt));
+
+  if (existingStarts.has(iso)) {
+	console.log(
+	  `[Scheduler Single] Meeting already exists for ${pkgId} at ${iso}, skipping.`
+	);
+	return;
+  }
+
+  console.log(
+	`[Scheduler Single] Creating meeting for package ${pkgId} (“${title}”) at ${iso}`
+  );
+  try {
+	const rec = await createMeetingForPackage(pkgId, iso);
+	console.log(
+	  `[Scheduler Single] Created Meeting ${rec.id} for package ${pkgId}`
+	);
+  } catch (err) {
+	console.error(
+	  `[Scheduler Single] Failed to create Meeting for ${pkgId} at ${iso}:`,
+	  err
+	);
+  }
 }

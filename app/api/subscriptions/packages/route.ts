@@ -1,4 +1,4 @@
-// app/api/subscriptions/packages/route.ts
+// File: app/api/subscriptions/packages/route.ts
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
@@ -42,29 +42,42 @@ export async function POST(req: Request) {
 
   const uid = session.user.id;
   const body = await req.json();
-  const { recordId, Status, ...rest } = body;
+  const { recordId, Status, forceCreate, ...rest } = body;
 
-  if (!recordId) {
-    return NextResponse.json({ error: 'Missing recordId' }, { status: 400 });
-  }
-
-  // 2️⃣ Handle a pure status update (e.g. delete or change status)
-  if (Status) {
+  // 2️⃣ Handle a pure status update (e.g. soft-delete or change status)
+  if (Status !== undefined) {
+    if (!recordId) {
+      return NextResponse.json(
+        { error: 'Missing recordId for status update' },
+        { status: 400 }
+      );
+    }
     try {
       await SubscriptionPackages.update(recordId, { Status });
-      return NextResponse.json({ success: true, subscriptionPackage: { id: recordId } });
+      return NextResponse.json({
+        success: true,
+        subscriptionPackage: { id: recordId },
+      });
     } catch (err: any) {
       console.error('[Subscriptions API] POST status update error', err);
       return NextResponse.json({ error: err.message }, { status: 500 });
     }
   }
 
-  // 3️⃣ Otherwise, full upsert of subscription package
+  // 3️⃣ Upsert (create or update) requires either recordId or forceCreate
+  if (!recordId && !forceCreate) {
+    return NextResponse.json(
+      { error: 'Missing recordId (or forceCreate) for upsert' },
+      { status: 400 }
+    );
+  }
+
+  // 4️⃣ Perform the full upsert of subscription package
   try {
     const record = await upsertSubscriptionPackage({
       uid,
-      recordId: rest.recordId,
-      forceCreate: rest.forceCreate,
+      recordId,              // may be undefined if forceCreate = true
+      forceCreate: Boolean(forceCreate),
       meetingTemplateId: rest.meetingTemplateId,
       Title: rest.Title,
       FirstSession: rest.FirstSession,

@@ -1,5 +1,3 @@
-// lib/airtable.ts
-
 import Airtable, { FieldSet } from 'airtable';
 
 // Configure Airtable
@@ -230,11 +228,42 @@ export async function createMeetingForPackage(
   });
 }
 
+// ────────────────────────────────────────────────────────────────────────────────
+// StripeEvents table and helper
+// ────────────────────────────────────────────────────────────────────────────────
+
+export const StripeEvents = base('StripeEvents');
+
 /**
- * Fetch all SubscriptionPackages whose Status is "Live."
+ * Create a new StripeEvent record in Airtable.
  */
-export async function getAllSubscriptionPackages(): Promise<Airtable.Record<FieldSet>[]> {
-  return SubscriptionPackages.select({
-    filterByFormula: `{Status}='Live'`
-  }).firstPage();
+export async function createStripeEvent({
+  eventId,
+  type,
+  createdAt,
+  subscriptionPackageId,
+  stripeCustomerId,
+  amount,
+  currency,
+  rawPayload,
+}: {
+  eventId: string;
+  type: string;
+  createdAt: string;               // ISO timestamp
+  subscriptionPackageId: string;   // Airtable record ID for SubscriptionPackages
+  stripeCustomerId?: string;
+  amount?: number;                 // in cents
+  currency?: string;
+  rawPayload: string;              // full JSON payload
+}): Promise<Airtable.Record<FieldSet>> {
+  return StripeEvents.create({
+    EventId: eventId,
+    Type: type,
+    CreatedAt: createdAt,
+    SubscriptionPackage: [subscriptionPackageId],
+    StripeCustomerId: stripeCustomerId ?? null,
+    Amount: amount ?? null,
+    Currency: currency ?? null,
+    RawPayload: rawPayload,
+  });
 }

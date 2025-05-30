@@ -1,4 +1,4 @@
-// app/api/subscriptions/confirm/route.ts
+// File: app/api/subscriptions/confirm/route.ts
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
@@ -76,8 +76,12 @@ export async function POST(req: Request) {
   const price = await stripe.prices.create(priceParams, { stripeAccount });
 
   // 7️⃣ Create a Stripe Payment Link
+  //    ← here we add the subscriptionPackageId into metadata
   const paymentLink = await stripe.paymentLinks.create(
-    { line_items: [{ price: price.id, quantity: 1 }] },
+    {
+      line_items: [{ price: price.id, quantity: 1 }],
+      metadata: { subscriptionPackageId },
+    },
     { stripeAccount }
   );
 
