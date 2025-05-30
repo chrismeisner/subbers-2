@@ -5,10 +5,10 @@ import Link from 'next/link';
 
 interface Subscription {
   id: string;
+  title: string | null;
   customer: string;
   customer_email: string | null;
   status: string;
-  current_period_end: number; // Unix timestamp
   priceId: string;
   priceAmount: number | null;
   priceCurrency: string | null;
@@ -91,9 +91,9 @@ export default function ImportSubscriptionsPage() {
 			<thead>
 			  <tr className="bg-gray-100">
 				<th className="px-3 py-2 text-left">Subscription ID</th>
+				<th className="px-3 py-2 text-left">Title</th>
 				<th className="px-3 py-2 text-left">Customer Email</th>
 				<th className="px-3 py-2 text-left">Status</th>
-				<th className="px-3 py-2 text-left">Period Ends</th>
 				<th className="px-3 py-2 text-left">Price</th>
 				<th className="px-3 py-2 text-left">Action</th>
 			  </tr>
@@ -102,11 +102,9 @@ export default function ImportSubscriptionsPage() {
 			  {subscriptions.map(sub => (
 				<tr key={sub.id} className="border-t">
 				  <td className="px-3 py-2 text-sm text-gray-700">{sub.id}</td>
+				  <td className="px-3 py-2">{sub.title ?? '—'}</td>
 				  <td className="px-3 py-2">{sub.customer_email || '—'}</td>
 				  <td className="px-3 py-2">{sub.status}</td>
-				  <td className="px-3 py-2">
-					{new Date(sub.current_period_end * 1000).toLocaleString()}
-				  </td>
 				  <td className="px-3 py-2">
 					{sub.priceAmount != null && sub.priceCurrency
 					  ? new Intl.NumberFormat('en-US', {

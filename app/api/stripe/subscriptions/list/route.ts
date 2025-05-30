@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getUserRecord } from '@/lib/airtable';
 import { stripe } from '@/lib/stripe';
+import type { Stripe } from 'stripe';
 
 export async function GET(req: Request) {
   // 1️⃣ Authenticate user
@@ -21,41 +22,56 @@ export async function GET(req: Request) {
   }
   const stripeAccountId = rawStripe;
 
-  // 3️⃣ Fetch active subscriptions, expanding customer object for email
   try {
+	// 3️⃣ Fetch active subscriptions, expanding only customer & price
 	const list = await stripe.subscriptions.list(
 	  {
 		status: 'active',
 		limit: 100,
-		expand: ['data.customer'],
+		expand: ['data.customer', 'data.items.data.price'],
 	  },
 	  { stripeAccount: stripeAccountId }
 	);
 
-	// 4️⃣ Map to our minimal payload
+	// 4️⃣ Build minimal subscription objects
 	const subscriptions = list.data.map((s) => {
-	  // Customer ID & email (expanded)
-	  const cust = s.customer;
-	  const customerId = typeof cust === 'string' ? cust : cust.id;
-	  const customerEmail = typeof cust === 'string' ? null : cust.email ?? null;
-
-	  // Grab first plan item
-	  const item = s.items.data[0]?.price;
-	  const priceId = item?.id ?? null;
-	  const priceAmount = item?.unit_amount ?? null;
-	  const priceCurrency = item?.currency ?? null;
+	  const cust = s.customer as Stripe.Customer;
+	  const item = s.items.data[0]?.price as Stripe.Price;
 
 	  return {
 		id: s.id,
-		customer: customerId,
-		customer_email: customerEmail,
+		title: null as string | null,             // fill in next
+		customer: cust.id,
+		customer_email: cust.email ?? null,
 		status: s.status,
-		current_period_end: s.current_period_end,
-		priceId,
-		priceAmount,
-		priceCurrency,
+		priceId: item?.id ?? null,
+		priceAmount: item?.unit_amount ?? null,
+		priceCurrency: item?.currency ?? null,
 	  };
 	});
+
+	// 5️⃣ Fetch product names in a second call
+	await Promise.all(
+	  subscriptions.map(async (sub) => {
+		if (sub.priceId) {
+		  try {
+			const priceObj = await stripe.prices.retrieve(
+			  sub.priceId,
+			  { expand: ['product'] },
+			  { stripeAccount: stripeAccountId }
+			);
+			if (priceObj.product && typeof priceObj.product !== 'string') {
+			  sub.title = priceObj.product.name;
+			}
+		  } catch (err) {
+			console.error(
+			  `[Subscriptions List] failed to fetch product for price ${sub.priceId}:`,
+			  err
+			);
+		  }
+		}
+	  })
+	);
 
 	return NextResponse.json({ subscriptions });
   } catch (err) {
