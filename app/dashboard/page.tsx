@@ -1,3 +1,5 @@
+// File: app/dashboard/page.tsx
+
 'use client';
 export const dynamic = 'force-dynamic';
 
@@ -23,39 +25,10 @@ interface UserStatus {
   zoomUserEmail: string | null;
 }
 
-interface Customer {
-  id: string;
-  name: string | null;
-  email: string | null;
-}
-
-interface Meeting {
-  id: string;
-  topic: string;
-  start_time: string;
-}
-
-interface PaymentLink {
-  id: string;
-  url: string;
-  active: boolean;
-  title: string | null;
-  priceAmount: number | null;
-  priceCurrency: string | null;
-}
-
-interface Purchase {
-  id: string;
-  created: number;
-  customer_email: string | null;
-  payment_status: string;
-  productName: string | null;
-  isRecurring: boolean;
-  amount_total: number;
-  currency: string;
-  url: string | null;
-  paymentLinkId: string | null;
-}
+interface Customer { /* … */ }
+interface Meeting  { /* … */ }
+interface PaymentLink { /* … */ }
+interface Purchase { /* … */ }
 
 interface SubscriptionPackageRow {
   id: string;
@@ -76,8 +49,7 @@ interface SubscriptionPackageRow {
 }
 
 export default function DashboardPage() {
-  const { status } = useSession({ required: true });
-
+  const { data: session, status } = useSession({ required: true });
   const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [hasMoreCustomers, setHasMoreCustomers] = useState(false);
@@ -255,6 +227,10 @@ export default function DashboardPage() {
 	return sortDirection === 'asc' ? cmp : -cmp;
   });
 
+  // Build the consistent “manage subscription” URL for this user
+  const uid = session?.user?.id;
+  const manageUrl = uid ? `/${uid}/manage-subscription` : null;
+
   return (
 	<div className="space-y-6">
 	  {/* Header & Controls */}
@@ -266,21 +242,35 @@ export default function DashboardPage() {
 			  Last updated: {new Date(lastUpdated).toLocaleTimeString()}
 			</span>
 		  )}
-		  <button onClick={handleRefresh} className="px-3 py-1 bg-blue-500 text-white rounded">
+		  <button
+			onClick={handleRefresh}
+			className="px-3 py-1 bg-blue-500 text-white rounded"
+		  >
 			Refresh
 		  </button>
-		  <button onClick={handleTriggerCron} className="px-3 py-1 bg-yellow-500 text-white rounded">
+		  <button
+			onClick={handleTriggerCron}
+			className="px-3 py-1 bg-yellow-500 text-white rounded"
+		  >
 			Trigger Cron Jobs
 		  </button>
-		  <Link
-			href="/dashboard/import-subscriptions"
-			className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-		  >
-			Import Subscriptions
-		  </Link>
+
+		  {/* ── Consistent “Manage Subscription” Link ── */}
+		  {userStatus.stripeConnected && manageUrl && (
+			<Link
+			  href={manageUrl}
+			  target="_blank"
+			  rel="noopener noreferrer"
+			  className="text-green-600 hover:underline"
+			>
+			  {manageUrl}
+			</Link>
+		  )}
+		  {/* ──────────────────────────────────────────── */}
+
 		  <Link
 			href="/subscriptions/new"
-			className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+			className="px-4 py-2 bg-green-600 text-white rounded"
 		  >
 			Create Subscription
 		  </Link>
@@ -306,7 +296,10 @@ export default function DashboardPage() {
 	  )}
 
 	  {paymentLinks.length > 0 && (
-		<StripePaymentLinks paymentLinks={paymentLinks} />
+		<StripePaymentLinks
+		  paymentLinks={paymentLinks}
+		  stripeAccountId={userStatus.stripeAccountId}
+		/>
 	  )}
 
 	  <PurchaseHistory
